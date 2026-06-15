@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpinWise (embed)</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+    <style> html, body { height: 100%; background: transparent; } </style>
+  </head>
+  <body>
+    <div id="spinwise-root" class="chat" style="height: 100%; border-radius: 0;"></div>
+    <script>
+      const params = new URLSearchParams(location.search);
+      window.SpinWiseConfig = {
+        apiBaseUrl: params.get('api') || 'http://localhost:4000/api',
+        channel: 'web-widget',
+      };
+    </script>
+    <script type="module" src="./src/chat-ui.js"></script>
+  </body>
+</html>

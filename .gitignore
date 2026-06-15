@@ -1,0 +1,81 @@
+# ─────────── Secrets ───────────
+# NEVER commit the populated .env. The example template is committed instead.
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ─────────── Node / NestJS backend ───────────
+node_modules/
+dist/
+build/
+coverage/
+.nest/
+.npm/
+.eslintcache
+*.tsbuildinfo
+
+# ─────────── Flutter / Dart ───────────
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+.fvm/
+build/
+ios/Pods/
+ios/Podfile.lock
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+android/.gradle/
+android/local.properties
+android/key.properties
+android/app/release/
+android/app/debug/
+linux/flutter/ephemeral/
+macos/Flutter/ephemeral/
+windows/flutter/ephemeral/
+
+# ─────────── Python (web-widget dev server) ───────────
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ─────────── Claude Code local settings ───────────
+.claude/settings.local.json
+
+# ─────────── IDE / editors ───────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+*.iml
+
+# ─────────── Root reference documents ───────────
+/Exicom Brand Identity Guidelines_2.0.pdf
+/Exicom_AC_Charger_Support_Chatbot_Flow_v1.2.docx
+
+# ─────────── One-off PDF / extraction artifacts ───────────
+docs/brand-extract.txt
+docs/pdf-images/
+docs/page*.png
+backend/scripts/extract-pdf-images.js
+backend/scripts/render-page.js
+
+# ─────────── Logs ───────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─────────── OS junk ───────────
+$RECYCLE.BIN/
+[Tt]humbs.db
+ehthumbs.db
+desktop.ini

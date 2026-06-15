@@ -1,0 +1,305 @@
+{
+  "faults": [
+    {
+      "alarm": "Mains Fail",
+      "led": "red solid OR no LED",
+      "customerSteps": ["Confirm MCB is ON.", "Confirm grid supply is present at the socket."],
+      "nocSteps": ["Read phase voltage on live params; if <50V advise customer-side electrician."],
+      "ticketTrigger": "Voltage in range but alarm persists",
+      "severity": "Major"
+    },
+    {
+      "alarm": "Mains Low",
+      "led": "red solid",
+      "customerSteps": ["Wait for voltage recovery.", "If not recovering, customer's electrician must check supply."],
+      "nocSteps": ["Verify <90V on live params."],
+      "ticketTrigger": "Voltage in range but alarm persists",
+      "severity": "Major"
+    },
+    {
+      "alarm": "Mains High",
+      "led": "red solid",
+      "customerSteps": ["Wait for voltage recovery.", "If not recovering, customer's electrician must check supply."],
+      "nocSteps": ["Verify >265V on live params."],
+      "ticketTrigger": "Voltage in range but alarm persists",
+      "severity": "Major"
+    },
+    {
+      "alarm": "Mains Very High",
+      "led": "red solid",
+      "customerSteps": ["Stop using the charger until supply normalises."],
+      "nocSteps": ["Verify >275V on live params."],
+      "ticketTrigger": "Voltage in range but alarm persists",
+      "severity": "Critical"
+    },
+    {
+      "alarm": "R-Phase Fail",
+      "led": "red solid",
+      "customerSteps": ["Confirm phase available.", "MCB ON, wires tight.", "MCB OFF 30s → ON."],
+      "nocSteps": ["Command 10ac3910 verify; check phase voltage; correct single-vs-three-phase setting and restart."],
+      "ticketTrigger": "Voltage/settings correct but persists",
+      "severity": "Major"
+    },
+    {
+      "alarm": "Y-Phase Fail",
+      "led": "red solid",
+      "customerSteps": ["Confirm phase available.", "MCB ON, wires tight.", "MCB OFF 30s → ON."],
+      "nocSteps": ["Command 10ac3910 verify; check phase voltage; correct single-vs-three-phase setting and restart."],
+      "ticketTrigger": "Voltage/settings correct but persists",
+      "severity": "Major"
+    },
+    {
+      "alarm": "B-Phase Fail",
+      "led": "red solid",
+      "customerSteps": ["Confirm phase available.", "MCB ON, wires tight.", "MCB OFF 30s → ON."],
+      "nocSteps": ["Command 10ac3910 verify; check phase voltage; correct single-vs-three-phase setting and restart."],
+      "ticketTrigger": "Voltage/settings correct but persists",
+      "severity": "Major"
+    },
+    {
+      "alarm": "Output Current High",
+      "led": "red solid",
+      "customerSteps": [
+        "Stop charging and remove gun.",
+        "Inspect gun for damage (photo welcome).",
+        "Reinsert gun until it locks; retry.",
+        "Try another vehicle; if reproducible, vehicle service check."
+      ],
+      "nocSteps": ["Verify charging current vs rated-current setting."],
+      "ticketTrigger": "Vehicle OK but persists",
+      "severity": "Critical"
+    },
+    {
+      "alarm": "Output Current Very High",
+      "led": "red solid",
+      "customerSteps": ["Stop charging immediately.", "Do not reuse until inspected."],
+      "nocSteps": ["Verify charging current vs rated-current setting."],
+      "ticketTrigger": "Immediate",
+      "severity": "Critical"
+    },
+    {
+      "alarm": "Earth Detect",
+      "led": "red blink ~1s",
+      "customerSteps": ["Earth wire tight at MCB end.", "One restart.", "Electrician earthing-pit check."],
+      "nocSteps": ["NE voltage check on live params.", "Diagnose alarm logs; clear and validate fix."],
+      "ticketTrigger": "NE within limits but persists",
+      "severity": "Major"
+    },
+    {
+      "alarm": "Earth Open",
+      "led": "red blink ~1s",
+      "customerSteps": ["Earth wire tight at MCB end.", "One restart.", "Electrician earthing-pit check."],
+      "nocSteps": ["NE voltage check on live params.", "Diagnose alarm logs; clear and validate fix."],
+      "ticketTrigger": "NE within limits but persists",
+      "severity": "Major"
+    },
+    {
+      "alarm": "Earth Leakage",
+      "led": "red blink ~2s slow",
+      "customerSteps": ["Apply software update via app.", "Retry.", "Try another vehicle.", "Electrician earthing check."],
+      "nocSteps": ["Command verification.", "Diagnose alarm logs; clear and validate fix."],
+      "ticketTrigger": "Earthing proper but persists",
+      "severity": "Major"
+    },
+    {
+      "alarm": "NE Volt High",
+      "led": "red blink fast 500ms",
+      "customerSteps": [
+        "Healthy NE target <5V; alarm at >40V idle / >70V charging.",
+        "Earth wire tight at MCB end.",
+        "Restart.",
+        "Electrician earthing-pit check."
+      ],
+      "nocSteps": ["NE on live params.", "Diagnose alarm logs; clear and validate fix."],
+      "ticketTrigger": "NE within limits but persists",
+      "severity": "Major"
+    },
+    {
+      "alarm": "PWM Fault",
+      "led": "red solid",
+      "customerSteps": ["Restart once.", "Remove gun, reinsert until locked, retry."],
+      "nocSteps": [],
+      "ticketTrigger": "Fault reappears",
+      "severity": "Major"
+    },
+    {
+      "alarm": "EM Comm",
+      "led": "red solid",
+      "customerSteps": ["Restart charger once."],
+      "nocSteps": ["Command verification (10ac3910)."],
+      "ticketTrigger": "Reappears after restart",
+      "severity": "Major"
+    },
+    {
+      "alarm": "EM IC 1",
+      "led": "red solid",
+      "customerSteps": ["Restart charger once."],
+      "nocSteps": ["Command verification (10ac3910)."],
+      "ticketTrigger": "Reappears after restart",
+      "severity": "Major"
+    },
+    {
+      "alarm": "EM IC 2",
+      "led": "red solid",
+      "customerSteps": ["Restart charger once."],
+      "nocSteps": ["Command verification (10ac3910)."],
+      "ticketTrigger": "Reappears after restart",
+      "severity": "Major"
+    },
+    {
+      "alarm": "SD Card",
+      "led": "red solid",
+      "customerSteps": ["Restart charger once."],
+      "nocSteps": ["Command verification (10ac3910)."],
+      "ticketTrigger": "Reappears after restart",
+      "severity": "Major"
+    },
+    {
+      "alarm": "Ext EEP",
+      "led": "red solid",
+      "customerSteps": ["Restart charger once."],
+      "nocSteps": ["Command verification (10ac3910)."],
+      "ticketTrigger": "Reappears after restart",
+      "severity": "Major"
+    },
+    {
+      "alarm": "Ext RS485",
+      "led": "red solid",
+      "customerSteps": ["Restart charger once."],
+      "nocSteps": ["Command verification (10ac3910)."],
+      "ticketTrigger": "Reappears after restart",
+      "severity": "Major"
+    },
+    {
+      "alarm": "WIFI BLE Comm Fault",
+      "led": "red solid",
+      "customerSteps": ["If app won't connect via BLE → ticket.", "If app connects → restart."],
+      "nocSteps": ["Command 10ac3900 verify."],
+      "ticketTrigger": "Reappears",
+      "severity": "Major"
+    },
+    {
+      "alarm": "GSM Comm Fault",
+      "led": "red solid",
+      "customerSteps": ["Restart."],
+      "nocSteps": ["Command verify network loss."],
+      "ticketTrigger": "Persists",
+      "severity": "Minor"
+    },
+    {
+      "alarm": "Weld Detection",
+      "led": "red solid",
+      "customerSteps": ["Remove gun. Keep charger idle."],
+      "nocSteps": ["Relay ON → wait 5s → relay OFF → wait 5s → restart → re-initiate session."],
+      "ticketTrigger": "Persists",
+      "severity": "Critical"
+    },
+    {
+      "alarm": "Temperature High",
+      "led": "red solid",
+      "customerSteps": ["Cool 15–20 min.", "Check shade/ventilation (Indian summers).", "Retry."],
+      "nocSteps": ["Temp >85°C on live params."],
+      "ticketTrigger": "Temp <85°C but alarm persists",
+      "severity": "Major"
+    },
+    {
+      "alarm": "Emergency Detect",
+      "led": "red solid (Tata: + buzzer)",
+      "customerSteps": ["Rotate emergency button to release.", "Restart."],
+      "nocSteps": ["If no EPO button installed → disable EPO alarm in portal Alarm Settings."],
+      "ticketTrigger": "Button released but persists",
+      "severity": "Critical"
+    },
+    {
+      "alarm": "SPD",
+      "led": "red solid",
+      "customerSteps": ["One restart, then ticket (no documented field resolution)."],
+      "nocSteps": [],
+      "ticketTrigger": "Immediately",
+      "severity": "Critical"
+    },
+    {
+      "alarm": "LED Board",
+      "led": "red solid",
+      "customerSteps": ["One restart, then ticket (no documented field resolution)."],
+      "nocSteps": [],
+      "ticketTrigger": "Immediately",
+      "severity": "Critical"
+    },
+    {
+      "alarm": "Connectivity Board",
+      "led": "red solid",
+      "customerSteps": ["One restart, then ticket (no documented field resolution)."],
+      "nocSteps": [],
+      "ticketTrigger": "Immediately",
+      "severity": "Critical"
+    },
+    {
+      "alarm": "MFU Comm Fault",
+      "led": "red solid",
+      "customerSteps": ["One restart, then ticket (no documented field resolution)."],
+      "nocSteps": [],
+      "ticketTrigger": "Immediately",
+      "severity": "Critical"
+    },
+
+    {
+      "_note": "ADDED — missing scenario. Vehicle dashboard shows 'gun connected' but Spin App shows 0A current during active charging session. Source: EV-AC_LED_Troubleshooting_Matrix.xlsx, State 8 (Charging) resolution.",
+      "alarm": "Charging Zero Output",
+      "led": "green blinking (charging state active)",
+      "customerSteps": [
+        "Confirm the vehicle dashboard shows 'gun connected' or 'charging'.",
+        "Open the Spin App and check the current reading while the session is active.",
+        "For MG vehicles: ensure the car is locked — MG requires the vehicle to be locked for charging to proceed.",
+        "If dashboard shows 'gun connected' and App shows 0A, this is a relay output fault — raise ticket for Power Card replacement."
+      ],
+      "nocSteps": [
+        "Check voltage at the output terminal after removing the gun.",
+        "Attempt to develop output voltage via command.",
+        "If output voltage does not develop to match input voltage → replace Power Card (Littlefuse Relay).",
+        "For Panasonic Relay: do NOT replace Power Card — escalate directly to R&D team."
+      ],
+      "ticketTrigger": "App shows 0A during active charging session",
+      "severity": "Major"
+    },
+    {
+      "_note": "ADDED — missing scenario. EVSE Suspended state caused by rated current dropping below minimum threshold (6A). Source: EV-AC_LED_Troubleshooting_Matrix.xlsx, State 9 (EVSE Suspended) engineer resolution.",
+      "alarm": "EVSE Suspended Low Rated Current",
+      "led": "yellow blinking (EVSE suspended state)",
+      "customerSteps": [
+        "Check the Spin App — if the rated current setting shows less than 6A, the charger will not charge.",
+        "Ask the Primary Owner to open the app and verify the rated current is set between 6A and 32A.",
+        "Restart the charger after adjusting the rated current. The charger reboots and applies the new value within ~60 seconds.",
+        "Reconnect the gun after restart and retry."
+      ],
+      "nocSteps": [
+        "Verify current rated-current setting on live params — must be ≥6A.",
+        "If rated current is correct, try reinserting or replacing the ribbon cable.",
+        "Check all electrical parameters for grid fluctuation.",
+        "If issue persists → replace Power Card."
+      ],
+      "ticketTrigger": "Rated current ≥6A but EVSE suspended persists",
+      "severity": "Major"
+    },
+    {
+      "_note": "ADDED — missing Tata vehicle-specific EV Suspended scenario. Certain Tata charger manufacturing batches require a KEI gun replacement. Source: EV-AC_LED_Troubleshooting_Matrix.xlsx, State 7 (EV Suspended) resolution.",
+      "alarm": "EV Suspended Tata Compatibility",
+      "led": "green solid on Tata/Compact (EV suspended state)",
+      "customerSteps": [
+        "Ask the customer for their charger's MFG (manufacturing) month code shown on the label.",
+        "If the MFG code is D925 or DO25 — this batch requires a KEI gun replacement. Raise a ticket immediately.",
+        "If the vehicle is a Tata Curve: reattach the gun 2–3 times firmly, ensuring it is properly seated. If issue persists, raise a ticket for gun replacement.",
+        "For all other vehicles with Tata/Compact charger: check for heat marks or burn signs at the gun terminal and input terminal (photo welcome).",
+        "Try restarting the system twice, at least 30 minutes apart. Replug the gun at each restart.",
+        "If unresolved after two restarts → raise ticket for engineer visit."
+      ],
+      "nocSteps": [
+        "Confirm charger MFG batch code (D925 / DO25 = KEI gun replacement required).",
+        "Check CP PWM signal and vehicle authorisation flow.",
+        "If vehicle-side issue suspected → advise customer to visit Tata vehicle dealership."
+      ],
+      "ticketTrigger": "MFG code D925/DO25 confirmed, or restarts fail to resolve",
+      "severity": "Major"
+    }
+  ]
+}

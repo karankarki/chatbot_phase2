@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#343A42" />
+    <title>SpinWise — Exicom Customer Care</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="page__hero">
+        <div class="page__brand">
+          <!--
+            Exicom wordmark — the brand-book "Company Logo".
+            Pure text so PP Mori renders correctly when licensed.
+          -->
+          <div class="page__brand__logo">exicom</div>
+          <div class="page__brand__product">
+            <h1>SpinWise</h1>
+            <p class="page__brand__sub">AC Charger virtual assistant</p>
+          </div>
+        </div>
+      </header>
+
+      <section class="page__chat-shell">
+        <div id="spinwise-root" class="chat" data-standalone="true"></div>
+      </section>
+
+      <footer class="page__footer">
+        <small>
+          By chatting you agree your conversation may be stored to improve service.
+          Your phone number is used only to look up your charger and service records.
+        </small>
+      </footer>
+    </main>
+
+    <script>
+      window.SpinWiseConfig = {
+        apiBaseUrl: window.SPINWISE_API_BASE || 'http://localhost:4000/api',
+        channel: 'web-widget',
+      };
+    </script>
+    <script type="module" src="./src/chat-ui.js"></script>
+  </body>
+</html>

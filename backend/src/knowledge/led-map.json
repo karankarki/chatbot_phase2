@@ -1,0 +1,114 @@
+{
+  "states": [
+    {
+      "state": "Booting",
+      "spinAir": { "colour": "cyan", "pattern": "solid" },
+      "tataCompact": { "colour": "white", "pattern": "solid" },
+      "meaning": "Starting up",
+      "resolutionBranch": "booting"
+    },
+    {
+      "state": "AvailableIdle",
+      "spinAir": { "colour": "cyan", "pattern": "blinking" },
+      "tataCompact": { "colour": "blue", "pattern": "solid" },
+      "meaning": "Ready, no vehicle connected",
+      "resolutionBranch": "ready-no-vehicle"
+    },
+    {
+      "state": "Unavailable",
+      "spinAir": { "colour": "cyan", "pattern": "blinking", "speed": "fast", "speedMs": 500 },
+      "tataCompact": { "colour": "yellow", "pattern": "solid" },
+      "meaning": "Disabled by backend or maintenance",
+      "resolutionBranch": "unavailable-noc-handoff"
+    },
+    {
+      "state": "Plugged",
+      "spinAir": { "colour": "green", "pattern": "solid" },
+      "tataCompact": { "colour": "blue", "pattern": "blinking", "speedMs": 1000 },
+      "meaning": "Vehicle detected, awaiting authorisation",
+      "resolutionBranch": "awaiting-auth-rfid"
+    },
+    {
+      "state": "Preparing",
+      "spinAir": { "colour": "yellow", "pattern": "solid" },
+      "tataCompact": { "colour": "yellow", "pattern": "solid" },
+      "meaning": "Authorized, charger ready — vehicle not yet requesting power",
+      "resolutionBranch": "yellow-solid-preparing"
+    },
+    {
+      "_note": "ADDED — was incorrectly merged with Preparing as PreparingOrEvSuspended. Tata/Compact EV Suspended is GREEN solid, NOT yellow. Source: EV-AC_LED_Troubleshooting_Matrix.xlsx col G/H row 7.",
+      "state": "EvSuspended",
+      "spinAir": { "colour": "yellow", "pattern": "solid" },
+      "tataCompact": { "colour": "green", "pattern": "solid" },
+      "meaning": "Vehicle has suspended charging — charger ready but vehicle not drawing power",
+      "resolutionBranch": "yellow-solid-ev-suspended"
+    },
+    {
+      "state": "Charging",
+      "spinAir": { "colour": "green", "pattern": "blinking" },
+      "tataCompact": { "colour": "green", "pattern": "blinking" },
+      "meaning": "Power being delivered",
+      "resolutionBranch": "charging-verify"
+    },
+    {
+      "state": "EvseSuspended",
+      "spinAir": { "colour": "yellow", "pattern": "blinking" },
+      "tataCompact": { "colour": "yellow", "pattern": "blinking" },
+      "meaning": "Paused by charger (often grid fluctuation or rated current below 6A)",
+      "resolutionBranch": "yellow-blinking"
+    },
+    {
+      "state": "Finishing",
+      "spinAir": { "colour": "white", "pattern": "blinking" },
+      "tataCompact": { "colour": "blue", "pattern": "blinking", "speed": "fast" },
+      "meaning": "Session ending — normal",
+      "resolutionBranch": "finishing-normal"
+    },
+    {
+      "state": "FirmwareUpdate",
+      "spinAir": { "colour": "white", "pattern": "blinking", "speed": "fast" },
+      "tataCompact": { "colour": "cyan", "pattern": "solid" },
+      "meaning": "Updating — do not power off",
+      "resolutionBranch": "firmware-update-wait"
+    },
+    {
+      "_note": "NOT FOUND in source documents (EV-AC_LED_Troubleshooting_Matrix.xlsx, CSV, SPIN_USER MANUAL.pptx). Retained but unverified — confirm with Exicom engineering before production.",
+      "state": "Reserved",
+      "spinAir": { "colour": "pink", "pattern": "blinking" },
+      "tataCompact": null,
+      "meaning": "Charger booked via network (OCPP) — normal",
+      "resolutionBranch": "reserved-ocpp"
+    },
+    {
+      "state": "FaultNonEarth",
+      "spinAir": { "colour": "red", "pattern": "solid" },
+      "tataCompact": { "colour": "red", "pattern": "solid" },
+      "meaning": "Alarm — check app",
+      "resolutionBranch": "red-solid-fault"
+    },
+    {
+      "state": "FaultEarth",
+      "spinAir": { "colour": "red", "pattern": "blinking" },
+      "tataCompact": { "colour": "red", "pattern": "blinking" },
+      "meaning": "Earth/NE safety issue",
+      "resolutionBranch": "red-blinking-earth"
+    },
+    {
+      "state": "NoPower",
+      "spinAir": { "colour": "none", "pattern": "none" },
+      "tataCompact": { "colour": "none", "pattern": "none" },
+      "meaning": "Supply or boot failure",
+      "resolutionBranch": "no-led-power"
+    }
+  ],
+  "earthBlinkSpeeds": {
+    "fast500ms": "NE Volt High",
+    "medium1s": "Earth Detect / Open",
+    "slow2s": "Earth Leakage"
+  },
+  "neVoltageThresholds": {
+    "healthyMaxVolts": 5,
+    "alarmIdleVolts": 40,
+    "alarmChargingVolts": 70
+  }
+}

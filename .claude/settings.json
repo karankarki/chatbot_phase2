@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(node --version)",
+      "PowerShell(npm --version)",
+      "PowerShell(python --version)",
+      "Bash(npm install *)",
+      "Bash(python -m http.server 5173)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
+      "Bash(npm run *)",
+      "Bash(curl -s -X POST http://localhost:4000/api/chat/session -H \"Content-Type: application/json\" -d '{\"channel\":\"web-widget\"}')",
+      "Bash(python -m json.tool)",
+      "Bash(curl -s -i -X OPTIONS http://localhost:4000/api/chat/session -H \"Origin: http://localhost:5173\" -H \"Access-Control-Request-Method: POST\" -H \"Access-Control-Request-Headers: content-type\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 4000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue; \"killed PID $\\($_.OwningProcess\\)\" })",
+      "Bash(git add *)"
+    ]
+  }
+}

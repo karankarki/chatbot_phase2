@@ -1,0 +1,10 @@
+{
+  "name": "spinwise-web-widget",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SpinWise standalone chat page + embeddable iframe widget",
+  "scripts": {
+    "dev": "python -m http.server 5173",
+    "dev:node": "npx --yes serve -p 5173 ."
+  }
+}
