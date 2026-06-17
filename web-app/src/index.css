@@ -30,6 +30,7 @@ body {
   border-radius: 20px;
   box-shadow: 0 12px 48px rgba(0,0,0,.18);
   overflow: hidden;
+  position: relative;
 }
 
 /* ── Header ──────────────────────────────────────────────────────────── */
@@ -174,6 +175,29 @@ body {
 }
 .quick-reply-btn:hover { background: var(--teal); color: #fff; }
 
+/* ── MCB reference images ────────────────────────────────────────────── */
+.mcb-images {
+  display: flex;
+  gap: 10px;
+  padding: 8px 14px;
+  justify-content: center;
+}
+.mcb-image-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #555;
+}
+.mcb-image-card img {
+  width: 130px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
 /* ── Charger picker ──────────────────────────────────────────────────── */
 .charger-picker {
   padding: 8px 14px 6px;
@@ -295,6 +319,93 @@ body {
 .session-closed button {
   background: none; border: none; color: var(--teal);
   text-decoration: underline; cursor: pointer; font-size: 13px;
+}
+
+/* ── Idle warning overlay ────────────────────────────────────────────── */
+.idle-warning {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 20;
+  padding-bottom: 80px;
+}
+.idle-warning__box {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 20px 28px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,.22);
+  min-width: 270px;
+}
+.idle-warning__box p { font-size: 14px; color: var(--text); margin-bottom: 14px; line-height: 1.5; }
+.idle-warning__box strong { color: var(--teal); }
+.idle-warning__box button {
+  background: var(--teal); color: #fff;
+  border: none; border-radius: 24px;
+  padding: 9px 30px; font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: background .15s;
+}
+.idle-warning__box button:hover { background: var(--teal-dark); }
+
+/* ── Review panel ────────────────────────────────────────────────────── */
+.review-panel {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: var(--white);
+  padding: 14px 20px 12px;
+}
+.review-panel__title {
+  font-size: 14px; font-weight: 600;
+  color: var(--text); text-align: center;
+  margin-bottom: 12px;
+}
+.review-panel__stars {
+  display: flex; justify-content: center; gap: 10px;
+  margin-bottom: 10px;
+}
+.review-star {
+  width: 44px; height: 44px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg); color: var(--text-muted);
+  font-size: 16px; font-weight: 700;
+  cursor: pointer; transition: all .15s;
+  display: flex; align-items: center; justify-content: center;
+}
+.review-star:hover { border-color: var(--teal); color: var(--teal); }
+.review-star--active { border-color: var(--teal); background: var(--teal); color: #fff; }
+.review-panel__feedback {
+  width: 100%;
+  border: 1.5px solid var(--border); border-radius: 12px;
+  padding: 8px 12px; font-size: 13px; resize: none; outline: none;
+  font-family: inherit; background: var(--bg); color: var(--text);
+  margin-bottom: 10px; transition: border-color .15s;
+}
+.review-panel__feedback:focus { border-color: var(--teal); }
+.review-panel__actions { display: flex; gap: 8px; }
+.review-panel__submit {
+  flex: 1; padding: 9px;
+  background: var(--teal); color: #fff;
+  border: none; border-radius: 24px;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: background .15s;
+}
+.review-panel__submit:disabled { background: #ccc; cursor: default; }
+.review-panel__submit:not(:disabled):hover { background: var(--teal-dark); }
+.review-panel__skip {
+  padding: 9px 16px; background: none;
+  border: 1.5px solid var(--border); border-radius: 24px;
+  font-size: 14px; color: var(--text-muted);
+  cursor: pointer; transition: border-color .15s, color .15s;
+}
+.review-panel__skip:hover { border-color: var(--teal); color: var(--teal); }
+.review-panel__thanks { text-align: center; padding: 8px 0; }
+.review-panel__thanks p { font-size: 14px; color: var(--text); margin-bottom: 10px; }
+.review-panel__thanks button {
+  background: none; border: none;
+  color: var(--teal); text-decoration: underline;
+  cursor: pointer; font-size: 13px;
 }
 
 /* ── Mobile fill ─────────────────────────────────────────────────────── */

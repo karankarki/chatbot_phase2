@@ -48,6 +48,9 @@ export interface CrmTicket {
   category: string;
   subCategory: string;
   ticketDate: string;
+  /** Actual ticket status: Open, Closed, Cancelled, Resolved, etc. */
+  ticketStatus: string;
+  /** Which team/person the ticket is currently pending with */
   pendingAt: string;
   timeline: TicketTimelineEntry[];
 }
@@ -137,7 +140,10 @@ export interface TicketSummaryResult {
     ticketNo: string;
     category: string;
     subCategory: string;
+    /** ticketStatus from CRM — Open, Closed, Cancelled, Resolved, etc. */
     status: string;
+    /** Which team/person the ticket is pending with */
+    pendingAt: string;
     ticketDate: string;
     timeline: Array<{
       stage: string;
@@ -174,4 +180,15 @@ export interface HandoffResult {
   handoffId: string;
   etaSeconds?: number;
   offline?: boolean;
+}
+
+// ─── Chat history API shapes ──────────────────────────────────────────────────
+
+export interface ChatHistoryFetchResponse {
+  status: { code: number; message: string };
+  data?: {
+    conversation?: string;
+    conversationText?: string;
+    createdAt?: string;
+  } | string | null;
 }

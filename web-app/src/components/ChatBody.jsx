@@ -11,11 +11,6 @@ function TicketCard({ ticketId }) {
           <span className="ticket-card__label">Ticket ID</span>
           <span className="ticket-card__value">{ticketId}</span>
         </div>
-        <div className="ticket-card__row">
-          <span className="ticket-card__icon">📋</span>
-          <span className="ticket-card__label">Status</span>
-          <span className="ticket-card__value">Open — engineer will follow up shortly</span>
-        </div>
       </div>
     </div>
   );

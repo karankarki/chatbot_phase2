@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 const API = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
@@ -25,13 +25,69 @@ export function useChat() {
   const [showIssueTypes, setShowIssueTypes] = useState(false);
   const [inputHint, setInputHint]           = useState(null); // 'mobile' | 'serial' | null
   const [isSpinApp, setIsSpinApp]           = useState(false);
-  const sessionId = useRef(null);
-  const idSeq     = useRef(0);
+  const [idleWarning, setIdleWarning]       = useState(false);
+  const [showReview, setShowReview]         = useState(false);
+  const [showYesNo, setShowYesNo]           = useState(false);
+  const [showMcbImages, setShowMcbImages]   = useState(false);
+
+  const sessionId    = useRef(null);
+  const idSeq        = useRef(0);
+  const lastActivity = useRef(Date.now());
+  const idleActive   = useRef(false); // true while warning is showing
 
   const nextId = () => ++idSeq.current;
 
   const pushMsg = (role, text, extra = {}) =>
     setMessages((prev) => [...prev, { id: nextId(), role, text, ...extra }]);
+
+  // ── Save open chat when user closes the browser/app tab ────────────────
+  useEffect(() => {
+    const handleUnload = () => {
+      if (!sessionId.current || closed) return;
+      const url = `${API}/chat/session/${sessionId.current}/save`;
+      // sendBeacon fires reliably on page unload; JSON blob sets content-type
+      navigator.sendBeacon(url, new Blob(['{}'], { type: 'application/json' }));
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, [closed]);
+
+  // ── Idle detection: 1 minute inactivity → 10s countdown ────────────────
+  useEffect(() => {
+    if (closed) return;
+    const timer = setInterval(() => {
+      if (!idleActive.current && Date.now() - lastActivity.current > 60_000) {
+        idleActive.current = true;
+        setIdleWarning(true);
+      }
+    }, 10_000);
+    return () => clearInterval(timer);
+  }, [closed]);
+
+  const stayActive = useCallback(() => {
+    lastActivity.current = Date.now();
+    idleActive.current   = false;
+    setIdleWarning(false);
+  }, []);
+
+  const closeFromIdle = useCallback(() => {
+    idleActive.current = false;
+    setIdleWarning(false);
+    setClosed(true);
+    setShowReview(true);
+  }, []);
+
+  const submitReview = useCallback(({ rating, feedback }) => {
+    if (sessionId.current) {
+      fetch(`${API}/chat/session/${sessionId.current}/rating`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating, feedback }),
+      }).catch(() => {});
+    }
+    setShowReview(false);
+  }, []);
+  // ───────────────────────────────────────────────────────────────────────
 
   const startSession = useCallback(async () => {
     const prefill = getSpinAppPrefill();
@@ -42,6 +98,12 @@ export function useChat() {
     setChargerOptions([]);
     setShowIssueTypes(false);
     setInputHint(null);
+    setIdleWarning(false);
+    setShowReview(false);
+    setShowYesNo(false);
+    setShowMcbImages(false);
+    lastActivity.current = Date.now();
+    idleActive.current   = false;
 
     const body = {
       channel: fromApp ? 'in-app' : 'web-widget',
@@ -59,21 +121,34 @@ export function useChat() {
     const data = await res.json();
     sessionId.current = data.sessionId;
 
-    // Build greeting based on what data is available
-    const name = prefill?.name;
-    const chargerCount = prefill?.serials?.length ?? 0;
-    let greeting;
-    if (name && chargerCount > 1) {
-      greeting = `Hello ${name}! 👋 I'm SpinWise, Exicom's virtual assistant.\n\nI can see you have ${chargerCount} chargers registered. Please select which charger you need help with:`;
-    } else if (name && chargerCount === 1) {
-      greeting = `Hello ${name}! 👋 I'm SpinWise, Exicom's virtual assistant.\n\nI can see your charger details. Please select the issue you're facing:`;
-    } else if (name) {
-      greeting = `Hello ${name}! 👋 I'm SpinWise, Exicom's virtual assistant.\n\nPlease select the issue you're facing:`;
+    // Restore previous conversation if available (Spin App with history)
+    if (data.restoredMessages?.length > 0) {
+      const restoredMsgs = data.restoredMessages.map((m) => ({
+        id: nextId(),
+        role: m.role,
+        text: m.text,
+      }));
+      setMessages([
+        ...restoredMsgs,
+        { id: nextId(), role: 'bot', text: 'Welcome back! Continuing from your previous conversation.' },
+      ]);
     } else {
-      greeting = "Hello! 👋 Welcome to Exicom Customer Care.\n\nI'm SpinWise, Exicom's virtual assistant, here to help you get charging again quickly.\n\nPlease select the issue you're facing:";
+      // Build greeting based on what data is available
+      const name = prefill?.name;
+      const chargerCount = prefill?.serials?.length ?? 0;
+      let greeting;
+      if (name && chargerCount > 1) {
+        greeting = `Hello ${name}! I'm SpinWise, Exicom's virtual assistant.\n\nI can see you have ${chargerCount} chargers registered. Please select which charger you need help with:`;
+      } else if (name && chargerCount === 1) {
+        greeting = `Hello ${name}! I'm SpinWise, Exicom's virtual assistant.\n\nI can see your charger details. Please select the issue you're facing:`;
+      } else if (name) {
+        greeting = `Hello ${name}! I'm SpinWise, Exicom's virtual assistant.\n\nPlease select the issue you're facing:`;
+      } else {
+        greeting = "Hello! Welcome to Exicom Customer Care.\n\nI'm SpinWise, Exicom's virtual assistant, here to help you get charging again quickly.\n\nPlease select the issue you're facing:";
+      }
+      setMessages([{ id: nextId(), role: 'bot', text: greeting }]);
     }
 
-    setMessages([{ id: nextId(), role: 'bot', text: greeting }]);
     if (data.chargerOptions?.length > 0) setChargerOptions(data.chargerOptions);
     if (data.showIssueTypes) setShowIssueTypes(true);
   }, []);
@@ -81,9 +156,16 @@ export function useChat() {
   const sendMessage = useCallback(async (text, attachments = []) => {
     if (!sessionId.current || closed) return;
 
+    // Reset idle timer on activity
+    lastActivity.current = Date.now();
+    idleActive.current   = false;
+    setIdleWarning(false);
+
     // Hide quick-reply UI immediately
     setChargerOptions([]);
     setShowIssueTypes(false);
+    setShowYesNo(false);
+    setShowMcbImages(false);
 
     // Show user bubble
     const display = attachments.length
@@ -159,7 +241,12 @@ export function useChat() {
             setChargerOptions(data.chargerOptions ?? []);
             setShowIssueTypes(data.showIssueTypes ?? false);
             setInputHint(data.inputHint ?? null);
-            if (data.closed) setClosed(true);
+            setShowYesNo(data.showYesNo ?? false);
+            setShowMcbImages(data.showMcbImages ?? false);
+            if (data.closed) {
+              setClosed(true);
+              setTimeout(() => setShowReview(true), 400);
+            }
           }
         }
       }
@@ -170,5 +257,10 @@ export function useChat() {
     }
   }, [closed]);
 
-  return { messages, typing, closed, chargerOptions, showIssueTypes, inputHint, isSpinApp, startSession, sendMessage };
+  return {
+    messages, typing, closed,
+    chargerOptions, showIssueTypes, inputHint, isSpinApp,
+    idleWarning, showReview, showYesNo, showMcbImages,
+    startSession, sendMessage, stayActive, closeFromIdle, submitReview,
+  };
 }
