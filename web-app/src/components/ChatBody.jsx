@@ -16,6 +16,12 @@ function TicketCard({ ticketId }) {
   );
 }
 
+function formatTime(ts) {
+  if (!ts) return null;
+  const d = new Date(ts);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 function Bubble({ msg }) {
   const isUser = msg.role === 'user';
   const isSystem = msg.role === 'system';
@@ -23,6 +29,8 @@ function Bubble({ msg }) {
   if (isSystem) {
     return <div className="bubble bubble--system">{msg.text}</div>;
   }
+
+  const timeLabel = formatTime(msg.ts);
 
   return (
     <div className={`bubble-row ${isUser ? 'bubble-row--user' : 'bubble-row--bot'}`}>
@@ -35,6 +43,7 @@ function Bubble({ msg }) {
           </span>
         ))}
         {msg.ticketId && <TicketCard ticketId={msg.ticketId} />}
+        {timeLabel && <span className={`bubble__time ${isUser ? 'bubble__time--user' : 'bubble__time--bot'}`}>{timeLabel}</span>}
       </div>
     </div>
   );

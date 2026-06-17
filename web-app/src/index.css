@@ -80,6 +80,10 @@ body {
 .bubble-row       { display: flex; align-items: flex-end; gap: 8px; }
 .bubble-row--user { flex-direction: row-reverse; }
 
+.bubble__time { display: block; font-size: 10px; line-height: 1; margin-top: 5px; text-align: right; }
+.bubble__time--user { color: rgba(255,255,255,0.75); }
+.bubble__time--bot  { color: #aaa; }
+
 .bubble__avatar {
   width: 32px; height: 32px;
   border-radius: 10px;

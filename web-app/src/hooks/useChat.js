@@ -29,16 +29,18 @@ export function useChat() {
   const [showReview, setShowReview]         = useState(false);
   const [showYesNo, setShowYesNo]           = useState(false);
   const [showMcbImages, setShowMcbImages]   = useState(false);
+  const [nocHandoffActive, setNocHandoffActive] = useState(false);
 
   const sessionId    = useRef(null);
   const idSeq        = useRef(0);
   const lastActivity = useRef(Date.now());
-  const idleActive   = useRef(false); // true while warning is showing
+  const idleActive   = useRef(false);
+  const nocTimerRef  = useRef(null);
 
   const nextId = () => ++idSeq.current;
 
   const pushMsg = (role, text, extra = {}) =>
-    setMessages((prev) => [...prev, { id: nextId(), role, text, ...extra }]);
+    setMessages((prev) => [...prev, { id: nextId(), role, text, ts: Date.now(), ...extra }]);
 
   // ── Save open chat when user closes the browser/app tab ────────────────
   useEffect(() => {
@@ -52,17 +54,17 @@ export function useChat() {
     return () => window.removeEventListener('beforeunload', handleUnload);
   }, [closed]);
 
-  // ── Idle detection: 1 minute inactivity → 10s countdown ────────────────
+  // ── NOC handoff timer: show idle warning 2 minutes after NOC is triggered ──
   useEffect(() => {
-    if (closed) return;
-    const timer = setInterval(() => {
-      if (!idleActive.current && Date.now() - lastActivity.current > 60_000) {
+    if (nocTimerRef.current) { clearTimeout(nocTimerRef.current); nocTimerRef.current = null; }
+    if (nocHandoffActive && !closed) {
+      nocTimerRef.current = setTimeout(() => {
         idleActive.current = true;
         setIdleWarning(true);
-      }
-    }, 10_000);
-    return () => clearInterval(timer);
-  }, [closed]);
+      }, 120_000);
+    }
+    return () => { if (nocTimerRef.current) clearTimeout(nocTimerRef.current); };
+  }, [nocHandoffActive, closed]);
 
   const stayActive = useCallback(() => {
     lastActivity.current = Date.now();
@@ -102,6 +104,7 @@ export function useChat() {
     setShowReview(false);
     setShowYesNo(false);
     setShowMcbImages(false);
+    setNocHandoffActive(false);
     lastActivity.current = Date.now();
     idleActive.current   = false;
 
@@ -123,14 +126,16 @@ export function useChat() {
 
     // Restore previous conversation if available (Spin App with history)
     if (data.restoredMessages?.length > 0) {
-      const restoredMsgs = data.restoredMessages.map((m) => ({
+      const now = Date.now();
+      const restoredMsgs = data.restoredMessages.map((m, i) => ({
         id: nextId(),
         role: m.role,
         text: m.text,
+        ts: now - (data.restoredMessages.length - i) * 1000,
       }));
       setMessages([
         ...restoredMsgs,
-        { id: nextId(), role: 'bot', text: 'Welcome back! Continuing from your previous conversation.' },
+        { id: nextId(), role: 'bot', text: 'Welcome back! Continuing from your previous conversation.', ts: now },
       ]);
     } else {
       // Build greeting based on what data is available
@@ -146,7 +151,7 @@ export function useChat() {
       } else {
         greeting = "Hello! Welcome to Exicom Customer Care.\n\nI'm SpinWise, Exicom's virtual assistant, here to help you get charging again quickly.\n\nPlease select the issue you're facing:";
       }
-      setMessages([{ id: nextId(), role: 'bot', text: greeting }]);
+      setMessages([{ id: nextId(), role: 'bot', text: greeting, ts: Date.now() }]);
     }
 
     if (data.chargerOptions?.length > 0) setChargerOptions(data.chargerOptions);
@@ -243,6 +248,7 @@ export function useChat() {
             setInputHint(data.inputHint ?? null);
             setShowYesNo(data.showYesNo ?? false);
             setShowMcbImages(data.showMcbImages ?? false);
+            setNocHandoffActive(data.nocHandoffActive ?? false);
             if (data.closed) {
               setClosed(true);
               setTimeout(() => setShowReview(true), 400);
@@ -260,7 +266,7 @@ export function useChat() {
   return {
     messages, typing, closed,
     chargerOptions, showIssueTypes, inputHint, isSpinApp,
-    idleWarning, showReview, showYesNo, showMcbImages,
+    idleWarning, showReview, showYesNo, showMcbImages, nocHandoffActive,
     startSession, sendMessage, stayActive, closeFromIdle, submitReview,
   };
 }
