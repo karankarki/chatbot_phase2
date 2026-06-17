@@ -71,7 +71,7 @@ export default function App() {
           <button onClick={startSession}>Start a new chat</button>
         </div>
       ) : (
-        <ChatComposer onSend={sendMessage} disabled={typing || closed} inputHint={inputHint} />
+        <ChatComposer onSend={sendMessage} disabled={typing || closed || showQuickReplies} inputHint={inputHint} />
       )}
 
       {/* Idle warning overlay — sits above the composer */}

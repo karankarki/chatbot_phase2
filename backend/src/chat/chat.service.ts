@@ -204,7 +204,7 @@ export class ChatService implements OnModuleInit {
     const inputHint: 'mobile' | 'serial' | null = closed ? null
       : s.slots.mobile
         ? (!s.slots.chargerSerial && botAskingSerial && !userGaveUpSerial) ? 'serial' : null
-        : botAskingMobile || userTurnCount >= 2
+        : botAskingMobile
           ? 'mobile'
           : null;
 
@@ -213,11 +213,12 @@ export class ChatService implements OnModuleInit {
 
     // Show MCB reference images when the user says they don't know what MCB is,
     // where to find it, or what it looks like.
-    const userAskedAboutMcb = /what.*\b(mcb|mccb)\b|where.*\b(mcb|mccb)\b|\b(mcb|mccb)\b.*where|don.?t know.*\b(mcb|mccb)\b|\b(mcb|mccb)\b.*don.?t know|what is.*\b(mcb|mccb)\b|what does.*\b(mcb|mccb)\b|how.*find.*\b(mcb|mccb)\b|never.*\b(mcb|mccb)\b|no idea.*\b(mcb|mccb)\b/i.test(lastUserMsg);
+    const userAskedAboutMcb = /\b(mcb|mccb)\b.*(what|how|where|look|find|show|appear|picture|image|identify|recogni[sz]e)|.*(what|how|where|look|find|show|appear|picture|image|don.?t know|no idea|never|identify|recogni[sz]e).*\b(mcb|mccb)\b/i.test(lastUserMsg);
     const showMcbImages = !closed && userAskedAboutMcb;
 
     const ticketId = s.slots.ticketId;
-    return { sessionId, closed, ticketId, chargerOptions, inputHint, showIssueTypes, showYesNo, showMcbImages };
+    const nocHandoffActive = !closed && !!s.slots.handoffRequested;
+    return { sessionId, closed, ticketId, chargerOptions, inputHint, showIssueTypes, showYesNo, showMcbImages, nocHandoffActive };
   }
 
   // Called when the user submits a star rating after a closed session.

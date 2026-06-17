@@ -145,7 +145,7 @@ export class LlmService implements OnModuleInit {
         response = await this.client.messages.create({ model: this.model, max_tokens: this.maxTokens, system, tools, messages });
       } catch (e) {
         this.log.error(`Anthropic API error: ${(e as Error).message}`);
-        const errReply = 'I am unable to connect to the AI service right now. Please try again in a moment.';
+        const errReply = 'Sorry, something went wrong on our end. Please try again.';
         this.sessions.append(sessionId, { role: 'assistant', content: errReply });
         return errReply;
       }
@@ -186,7 +186,7 @@ export class LlmService implements OnModuleInit {
         response = await stream.finalMessage();
       } catch (e) {
         this.log.error(`Anthropic stream error: ${(e as Error).message}`);
-        const errReply = 'I am unable to connect to the AI service right now. Please try again in a moment.';
+        const errReply = 'Sorry, something went wrong on our end. Please try again.';
         onChunk(errReply);
         this.sessions.append(sessionId, { role: 'assistant', content: errReply });
         return { text: errReply, closed: false };
