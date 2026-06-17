@@ -1,10 +1,12 @@
 import { useState, useRef } from 'react';
+import jsQR from 'jsqr';
 import AttachmentPreviews from './AttachmentPreviews';
 
-const ALLOWED_TYPES = ['image/', 'application/pdf', 'video/'];
+const HEIC_TYPES = new Set(['image/heic', 'image/heif']);
 const MAX_MB = 10;
 
 function classifyFile(file) {
+  if (HEIC_TYPES.has(file.type.toLowerCase())) return 'heic';
   if (file.type.startsWith('image/')) return 'image';
   if (file.type === 'application/pdf') return 'pdf';
   if (file.type.startsWith('video/')) return 'video';
@@ -25,7 +27,37 @@ function readAsBase64(file) {
   });
 }
 
-export default function ChatComposer({ onSend, disabled, maxLength }) {
+// Scan image file for a QR code. Returns the serial number (part after '#') or null.
+function scanQRCode(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        const { data, width, height } = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+        const result = jsQR(data, width, height);
+        if (result?.data?.includes('#')) {
+          const serial = result.data.split('#').pop()?.trim().toUpperCase();
+          resolve(serial || null);
+        } else {
+          resolve(null);
+        }
+      } catch {
+        resolve(null);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
+export default function ChatComposer({ onSend, disabled, inputHint }) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);   // { type, mediaType, data, name, previewUrl }
   const fileRef = useRef(null);
@@ -34,8 +66,19 @@ export default function ChatComposer({ onSend, disabled, maxLength }) {
     const added = [];
     for (const file of Array.from(fileList)) {
       const kind = classifyFile(file);
+      if (kind === 'heic') {
+        alert(`${file.name} is in HEIC format (iPhone default). Please open the photo in your Photos app, tap Share → Save as JPEG, then attach the JPEG version.`);
+        continue;
+      }
       if (!kind) { alert(`${file.name}: only images, PDFs, and videos are allowed.`); continue; }
       if (file.size > MAX_MB * 1024 * 1024) { alert(`${file.name} exceeds ${MAX_MB} MB.`); continue; }
+
+      // Try QR scan on images silently — pre-fill serial if found
+      if (kind === 'image') {
+        const serial = await scanQRCode(file);
+        if (serial) setText(serial);
+      }
+
       const { base64, mediaType } = await readAsBase64(file);
       const previewUrl = kind === 'image' ? URL.createObjectURL(file) : null;
       added.push({ type: kind, mediaType, data: base64, name: file.name, previewUrl });
@@ -90,25 +133,28 @@ export default function ChatComposer({ onSend, disabled, maxLength }) {
             className="composer__input"
             rows={1}
             placeholder={
-              maxLength === 10 ? 'Enter 10-digit mobile number'
-              : maxLength === 15 ? 'Enter 15-character serial number'
+              inputHint === 'mobile' ? 'Enter 10-digit mobile number'
+              : inputHint === 'serial' ? 'Enter charger serial number'
               : 'Type a message…'
             }
             value={text}
             onChange={(e) => {
               let val = e.target.value;
-              if (maxLength === 10) val = val.replace(/\D/g, '');        // digits only
-              if (maxLength === 15) val = val.toUpperCase();              // serial: uppercase
-              if (maxLength) val = val.slice(0, maxLength);              // hard cap
+              if (inputHint === 'mobile') val = val.replace(/\D/g, '').slice(0, 10);
+              if (inputHint === 'serial') {
+                // Uppercase only when input looks like a charger serial (alphanumeric, no spaces)
+                // If the user types a sentence/message, keep it lowercase so it reads naturally
+                val = /^[A-Z0-9]*$/i.test(val) ? val.toUpperCase() : val.toLowerCase();
+              }
               setText(val);
             }}
             onKeyDown={handleKey}
             disabled={disabled}
-            inputMode={maxLength === 10 ? 'numeric' : 'text'}
+            inputMode={inputHint === 'mobile' ? 'numeric' : 'text'}
           />
-          {maxLength && (
-            <span className={`composer__counter${text.length === maxLength ? ' composer__counter--full' : ''}`}>
-              {text.length}/{maxLength}
+          {inputHint === 'mobile' && (
+            <span className={`composer__counter${text.length === 10 ? ' composer__counter--full' : ''}`}>
+              {text.length}/10
             </span>
           )}
         </div>

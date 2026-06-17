@@ -4,6 +4,7 @@ import { appendFileSync } from 'fs';
 import {
   CategoryMapCallType,
   CategoryMapResponse,
+  ChatHistoryFetchResponse,
   ChargerSummary,
   CrmCreateTicketPayload,
   CrmCreateTicketResponse,
@@ -157,12 +158,12 @@ export class CrmClient {
       return { serial, totalTicketCount: 0, hasActiveTicket: false, recentTickets: [] };
     }
     const { totalCount, tickets } = res.data as { totalCount: number; tickets: CrmTicket[] };
-    const CLOSED_STATUSES = new Set(['closed', 'cancelled', 'resolved']);
-    const CLOSED_STAGES   = new Set(['closure', 'cancelled', 'cancellation', 'resolved', 'resolution']);
-    // Ticket is closed if pendingAt is a closed status, OR if any timeline stage signals closure
+    const CLOSED_STATUSES = new Set(['closed', 'cancelled', 'resolved', 'welcome call completed']);
+    const CLOSED_STAGES   = new Set(['closure', 'cancelled', 'cancellation', 'resolved', 'resolution', 'welcome call completed']);
+    // Ticket is closed if ticketStatus is a closed value, OR if any timeline stage signals closure
     const isClosed = (t: CrmTicket) =>
-      !t.pendingAt ||
-      CLOSED_STATUSES.has(t.pendingAt.toLowerCase()) ||
+      !t.ticketStatus ||
+      CLOSED_STATUSES.has(t.ticketStatus.toLowerCase()) ||
       t.timeline.some((e) => CLOSED_STAGES.has(e.stage.toLowerCase()));
     const isActive = (t: CrmTicket) => !isClosed(t);
     // Only Complaint-type tickets block new ticket creation — Query/others are ignored
@@ -175,12 +176,13 @@ export class CrmClient {
       totalTicketCount: totalCount,
       hasActiveTicket: !!activeComplaintTicket,
       activeTicketNo: activeComplaintTicket?.ticketNo,
-      activeTicketStatus: activeComplaintTicket?.pendingAt,
+      activeTicketStatus: activeComplaintTicket?.ticketStatus,
       recentTickets: tickets.map((t) => ({
         ticketNo: t.ticketNo,
         category: t.category,
         subCategory: t.subCategory,
-        status: t.pendingAt,
+        status: t.ticketStatus,
+        pendingAt: t.pendingAt,
         ticketDate: t.ticketDate.slice(0, 10),
         timeline: t.timeline.map((s) => ({
           stage: s.stage,
@@ -327,6 +329,60 @@ export class CrmClient {
       throw new Error(`Ticket creation failed: ${errs || 'unknown error'}`);
     }
     return { ticketId: data.data.ticketId, categoryName, subCategoryName };
+  }
+
+  // ─── Chat history ──────────────────────────────────────────────────────────
+
+  async fetchChatHistory(phoneNo: string, serialNo: string): Promise<{
+    found: boolean;
+    messages?: Array<{ role: string; content: string }>;
+    isClosed?: boolean;
+  }> {
+    try {
+      const headers = await this.authHeaders();
+      const { data } = await axios.get<ChatHistoryFetchResponse>(
+        `${this.base}/api/spin-chat/chat-history`,
+        { params: { mobileNumber: phoneNo, serialNumber: serialNo }, headers, timeout: 10_000 },
+      );
+      if (data.status?.code !== 2000 || !data.data || typeof data.data === 'string') {
+        return { found: false };
+      }
+      const body = data.data as { conversation?: string; conversationText?: string };
+      const raw  = body.conversation ?? body.conversationText ?? '';
+      if (!raw) return { found: false };
+
+      const isClosed = raw.includes('[END]');
+      if (isClosed) return { found: true, isClosed: true };
+
+      const cleaned = raw.replace(/\n\[END\]$/, '');
+      const messages = JSON.parse(cleaned) as Array<{ role: string; content: string }>;
+      return { found: true, messages, isClosed: false };
+    } catch (e) {
+      this.log.warn(`fetchChatHistory: ${(e as Error).message}`);
+      return { found: false };
+    }
+  }
+
+  async saveChatHistory(
+    phoneNo: string,
+    serialNo: string,
+    messages: Array<{ role: string; content: string }>,
+    closed = false,
+  ): Promise<void> {
+    try {
+      const headers = await this.authHeaders();
+      // Append [END] only for gracefully closed sessions so fetch can distinguish
+      // a resumable (abandoned) conversation from a completed one.
+      const conversation = JSON.stringify(messages) + (closed ? '\n[END]' : '');
+      await axios.post(
+        `${this.base}/api/spin-chat/chat-history`,
+        { phoneNo, serialNo, conversation },
+        { headers: { ...headers, 'Content-Type': 'application/json' }, timeout: 10_000 },
+      );
+      this.log.log(`[chatHistory] saved ${messages.length} msgs for ${phoneNo}/${serialNo} closed=${closed}`);
+    } catch (e) {
+      this.log.warn(`saveChatHistory: ${(e as Error).message}`);
+    }
   }
 
   // ─── NOC handoff ───────────────────────────────────────────────────────────

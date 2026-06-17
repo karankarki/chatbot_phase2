@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { readFileSync, writeFileSync } from 'fs';
 import Anthropic from '@anthropic-ai/sdk';
 import { SPINWISE_SYSTEM_PROMPT } from '../chat/prompt';
 import { TOOL_SCHEMAS } from './tool-schemas';
@@ -31,6 +32,58 @@ export class LlmService implements OnModuleInit {
     this.model = process.env.LLM_MODEL ?? 'claude-haiku-4-5-20251001';
     this.maxTokens = Number(process.env.LLM_MAX_TOKENS ?? 800);
   }
+
+  // ─── Token usage logger ────────────────────────────────────────────────────
+  // Pricing per million tokens (USD) — update if model changes
+  private static readonly PRICING: Record<string, { inputUSD: number; outputUSD: number }> = {
+    'claude-haiku-4-5-20251001': { inputUSD: 0.80,  outputUSD: 4.00  },
+    'claude-sonnet-4-6':         { inputUSD: 3.00,  outputUSD: 15.00 },
+    'claude-opus-4-8':           { inputUSD: 15.00, outputUSD: 75.00 },
+  };
+  private static readonly USD_TO_INR = 84;
+  private static readonly TOKEN_LOG  = '/tmp/spinwise-token-usage.log';
+  private static readonly MAX_RECORDS = 100;
+
+  private logTokenUsage(sessionId: string, inputTokens: number, outputTokens: number, iterations: number) {
+    const pricing = LlmService.PRICING[this.model] ?? { inputUSD: 0, outputUSD: 0 };
+    const costUSD = (inputTokens / 1_000_000) * pricing.inputUSD
+                  + (outputTokens / 1_000_000) * pricing.outputUSD;
+    const costINR = costUSD * LlmService.USD_TO_INR;
+    const record = {
+      timestamp:    new Date().toISOString(),
+      sessionId,
+      model:        this.model,
+      inputTokens,
+      outputTokens,
+      totalTokens:  inputTokens + outputTokens,
+      costUSD:      +costUSD.toFixed(6),
+      costINR:      +costINR.toFixed(4),
+      iterations,
+    };
+
+    try {
+      let records: typeof record[] = [];
+      try {
+        records = readFileSync(LlmService.TOKEN_LOG, 'utf8')
+          .split('\n').filter(Boolean).map((l) => JSON.parse(l));
+      } catch { /* file doesn't exist yet */ }
+
+      records.push(record);
+      if (records.length > LlmService.MAX_RECORDS) {
+        records = records.slice(records.length - LlmService.MAX_RECORDS);
+      }
+      writeFileSync(LlmService.TOKEN_LOG, records.map((r) => JSON.stringify(r)).join('\n') + '\n', 'utf8');
+    } catch (e) {
+      this.log.warn(`Token log write failed: ${(e as Error).message}`);
+    }
+
+    this.log.log(
+      `[tokens] session=${sessionId.slice(0, 8)} ` +
+      `in=${inputTokens} out=${outputTokens} total=${inputTokens + outputTokens} ` +
+      `cost=₹${costINR.toFixed(4)} ($${costUSD.toFixed(6)}) iters=${iterations}`,
+    );
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   /** Build the shared request params (system prompt + tools + messages). */
   private async buildRequestParams(sessionId: string, attachments?: Attachment[]) {
@@ -119,6 +172,9 @@ export class LlmService implements OnModuleInit {
     }
     const { system, tools, messages } = await this.buildRequestParams(sessionId, attachments);
 
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+
     for (let iter = 0; iter < LlmService.MAX_TOOL_ITERATIONS; iter++) {
       const chunks: string[] = [];
       let response: Anthropic.Message;
@@ -135,7 +191,13 @@ export class LlmService implements OnModuleInit {
         this.sessions.append(sessionId, { role: 'assistant', content: errReply });
         return { text: errReply, closed: false };
       }
+
+      totalInputTokens  += response.usage?.input_tokens  ?? 0;
+      totalOutputTokens += response.usage?.output_tokens ?? 0;
+
       if (response.stop_reason === 'tool_use') { await this.runTools(sessionId, response, messages); continue; }
+
+      this.logTokenUsage(sessionId, totalInputTokens, totalOutputTokens, iter + 1);
       return this.finalizeText(sessionId, chunks.join(''));
     }
 
@@ -215,13 +277,15 @@ export class LlmService implements OnModuleInit {
     if (ctxParts.length > 0) {
       const chargerConfirmed = !!slots.chargerSerial;
       const ticketFetched = slots.hasActiveTicket !== undefined;
-      const directive = chargerConfirmed && ticketFetched
-        ? 'Do NOT call lookup_customer or get_ticket_summary again — charger and ticket history already confirmed.'
-        : chargerConfirmed && !ticketFetched
-          ? `Charger ${slots.chargerSerial}${slots.chargerDescription ? ` (${slots.chargerDescription})` : ''} is already confirmed. Start your reply by saying "You have selected charger: ${slots.chargerSerial}${slots.chargerDescription ? ` — ${slots.chargerDescription}` : ''}. Let me fetch your service history." Then call get_ticket_summary for this serial, then ask what issue they are facing — do NOT ask for name or mobile.`
-          : slots.mobile
-            ? 'Mobile is already known. Call lookup_customer immediately using the mobile from SESSION_STATE — do NOT ask for name or mobile again. Then call get_ticket_summary once the charger is confirmed.'
-            : 'Call get_ticket_summary once immediately after the customer selects a charger.';
+      const directive = slots.restored
+        ? 'RESUMED CONVERSATION — the customer is returning to a previous chat. All their details are already known. Do NOT re-introduce yourself. Do NOT ask for name, mobile, or serial again. Do NOT call lookup_customer or get_ticket_summary. Just acknowledge you are picking up where you left off and continue naturally from the last message in the transcript.'
+        : chargerConfirmed && ticketFetched
+          ? 'Do NOT call lookup_customer or get_ticket_summary again — charger and ticket history already confirmed.'
+          : chargerConfirmed && !ticketFetched
+            ? `Charger ${slots.chargerSerial}${slots.chargerDescription ? ` (${slots.chargerDescription})` : ''} is already confirmed. Start your reply by saying "You have selected charger: ${slots.chargerSerial}${slots.chargerDescription ? ` — ${slots.chargerDescription}` : ''}. Let me fetch your service history." Then call get_ticket_summary for this serial, then ask what issue they are facing — do NOT ask for name or mobile.`
+            : slots.mobile
+              ? 'Mobile is already known. Call lookup_customer immediately using the mobile from SESSION_STATE — do NOT ask for name or mobile again. Then call get_ticket_summary once the charger is confirmed.'
+              : 'Call get_ticket_summary once immediately after the customer selects a charger.';
 
       // Build a compact ticket history block so the LLM can always show timeline
       // even in later turns (tool results are not stored in the session transcript).

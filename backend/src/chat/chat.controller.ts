@@ -40,6 +40,23 @@ export class ChatController {
     res.end();
   }
 
+  @Post('session/:id/rating')
+  async rating(
+    @Param('id') id: string,
+    @Body() body: { rating: number; feedback?: string },
+  ) {
+    await this.chat.saveRating(id, body.rating, body.feedback);
+    return { ok: true };
+  }
+
+  // Beacon endpoint — called via navigator.sendBeacon on page close.
+  // Returns 204 so the browser beacon succeeds without parsing a body.
+  @Post('session/:id/save')
+  saveOnClose(@Param('id') id: string, @Res() res: Response) {
+    this.chat.saveOpenChat(id);
+    res.status(204).end();
+  }
+
   @Get('session/:id')
   history(@Param('id') id: string) {
     return this.chat.history(id);

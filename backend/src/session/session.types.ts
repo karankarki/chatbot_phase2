@@ -38,6 +38,9 @@ export interface ChatSession {
     /** true if an active ticket already exists for the selected charger */
     hasActiveTicket?: boolean;
     activeTicketNo?: string;
+    activeTicketStatus?: string;
+    /** true when this session was restored from a previous incomplete conversation */
+    restored?: boolean;
     /** Ticket history for the selected charger — persisted so LLM can access it in any turn */
     recentTickets?: Array<{
       ticketNo: string;
