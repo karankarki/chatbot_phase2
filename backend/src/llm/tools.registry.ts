@@ -122,6 +122,7 @@ export class ToolRegistry {
       customerId: res.customerId,
       customerName,
       mobile: !serial ? this.normalizeMobile(rawIdentifier) : undefined,
+      circle: res.circle,
       chargers: res.chargers,
       chargerSerial: res.autoSelectedSerial,
       chargerModel: res.autoSelectedSerial
@@ -168,11 +169,11 @@ export class ToolRegistry {
       recentTickets: res.recentTickets,
     });
 
-    // Strip hasActiveTicket and activeTicketNo from what the LLM sees.
-    // These are stored in session slots so create_ticket can enforce the
-    // one-active-ticket rule at Stage 5 — the LLM must not reveal the
-    // ticket to the customer before they actually try to raise one.
-    const { hasActiveTicket: _h, activeTicketNo: _a, ...llmVisible } = res as unknown as Record<string, unknown>;
+    // Hide activeTicketNo from the LLM until Stage 5 (create_ticket returns it when blocking).
+    // hasActiveTicket IS exposed so the LLM makes correct block/allow decisions without
+    // trying to interpret raw ticket statuses itself (which leads to false positives on
+    // ambiguous statuses like "Cancelled" with "Request Approved" timeline entries).
+    const { activeTicketNo: _a, ...llmVisible } = res as unknown as Record<string, unknown>;
     return llmVisible;
   }
 
@@ -252,6 +253,7 @@ export class ToolRegistry {
       customerName: s.slots.customerName,
       mobileNumber: s.slots.mobile ?? '',
       serialNumber: s.slots.chargerSerial,
+      locationState: s.slots.circle,
       attachmentUrls: (input.photos_attachments as string[] | undefined) ?? s.slots.photos,
     });
 

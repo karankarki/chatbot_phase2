@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { readFileSync, writeFileSync } from 'fs';
 import OpenAI from 'openai';
-import { SPINWISE_SYSTEM_PROMPT } from '../chat/prompt';
+import { buildSystemPrompt } from '../chat/prompt';
 import { TOOL_SCHEMAS } from './tool-schemas';
 import { ToolRegistry } from './tools.registry';
 import { ChatMessage, ChatSession, SessionService } from '../session/session.service';
@@ -93,8 +93,8 @@ export class LlmService implements OnModuleInit {
   /** Build the messages array with system prompt prepended. */
   private async buildMessages(sessionId: string, attachments?: Attachment[]): Promise<OAIMessage[]> {
     const categories = await this.crm.getCategoriesForDisplay();
-    const systemPrompt = SPINWISE_SYSTEM_PROMPT + this.buildCategoryBlock(categories);
     const session = this.sessions.get(sessionId);
+    const systemPrompt = buildSystemPrompt(session.channel) + this.buildCategoryBlock(categories);
     const history = this.toOpenAIMessages(session.transcript, session.slots);
 
     if (attachments?.length) {

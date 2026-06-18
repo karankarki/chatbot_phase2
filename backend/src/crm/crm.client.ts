@@ -124,6 +124,7 @@ export class CrmClient {
       customerId: customerDetail.customerID,
       customerName: customerDetail.customerName,
       contactNumber: customerDetail.contactNumber,
+      circle: customerDetail.circle,
       chargerCount: chargers.length,
       chargers,
       autoSelectedSerial: chargers.length === 1 ? chargers[0].serial : undefined,
@@ -275,6 +276,7 @@ export class CrmClient {
     mobileNumber: string;
     serialNumber: string;
     productCode?: string;
+    locationState?: string;
     attachmentUrls?: string[];
   }): Promise<TicketCreateResult & { categoryName: string; subCategoryName: string }> {
     const { categoryId, subCategoryId, categoryName, subCategoryName } =
@@ -292,6 +294,7 @@ export class CrmClient {
         name: url.split('/').pop() ?? 'file',
         url,
       })),
+      ...(payload.locationState ? { location: { state: payload.locationState } } : {}),
     };
 
     const headers = await this.authHeaders();

@@ -27,6 +27,7 @@ export interface ChatSession {
     customerName?: string;
     mobile?: string;
     customerId?: string;
+    circle?: string;
     /** All chargers returned by lookup — for multi-charger selection */
     chargers?: ChargerSlot[];
     /** Serial of the charger the customer is having an issue with */

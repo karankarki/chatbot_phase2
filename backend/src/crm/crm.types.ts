@@ -93,6 +93,7 @@ export interface CrmCreateTicketPayload {
   customerInfo: { name: string; mobileNumber: string };
   assetInfo: { serialNumber: string; productCode?: string };
   attachments?: { name: string; url: string }[];
+  location?: { state: string };
 }
 
 export interface CrmCreateTicketResponse {
@@ -120,6 +121,7 @@ export interface CustomerLookup {
   customerId?: string;
   customerName?: string;
   contactNumber?: string;
+  circle?: string;
   chargerCount?: number;
   chargers: ChargerSummary[];
   /** Set when chargerCount === 1 so the model knows no selection is needed */

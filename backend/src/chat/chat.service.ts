@@ -197,7 +197,10 @@ export class ChatService implements OnModuleInit {
     // Tell the frontend which input mode to enforce next.
     const lastBotMsg = [...s.transcript].reverse().find((m) => m.role === 'assistant')?.content ?? '';
     const lastUserMsg = [...s.transcript].reverse().find((m) => m.role === 'user')?.content ?? '';
-    const botAskingMobile = /mobile\s*(number)?|phone\s*(number)?|registered\s*number/i.test(lastBotMsg);
+    // Only trigger when the bot is explicitly requesting the number as input,
+    // not when it merely mentions "mobile number" in guidance text.
+    const botAskingMobile = /\b(share|provide|enter|give|tell\s+me)\s+(your\s+)?(mobile|phone|registered)\s*(number)?/i.test(lastBotMsg)
+      || /\byour\s+registered\s+mobile\s+number\b.*\?/i.test(lastBotMsg);
     const botAskingSerial = /(share|provide|enter|give|tell).*serial|(serial\s*(number)?\s*(printed|on.*sticker))|printed on.*sticker/i.test(lastBotMsg);
     const userGaveUpSerial = /don.?t\s*have|no\s*serial|without.*serial|can.?t\s*find|not.*serial|no.*serial/i.test(lastUserMsg);
     const userTurnCount = s.transcript.filter((m) => m.role === 'user').length;
@@ -208,11 +211,18 @@ export class ChatService implements OnModuleInit {
           ? 'mobile'
           : null;
 
-    const showYesNo = !closed && lastBotMsg.includes('?')
-      && (/\bMCB\b/i.test(lastBotMsg)
-        || /burnt|black\s*mark|burn\s*mark/i.test(lastBotMsg)
-        || /anything else/i.test(lastBotMsg)
-        || /share.*feedback|leave.*feedback|feedback.*experience|feedback.*today/i.test(lastBotMsg));
+    // Split into sentences and find those that end with '?' — only check those
+    // for Yes/No keywords so incidental mentions (e.g. "no burnt marks, can I have your name?")
+    // don't incorrectly trigger the buttons.
+    const questionSentences = lastBotMsg
+      .split(/(?<=[.!?])\s+/)
+      .filter((s) => s.trimEnd().endsWith('?'))
+      .join(' ');
+    const showYesNo = !closed && questionSentences.length > 0
+      && (/\bMCB\b/i.test(questionSentences)
+        || /burnt|black\s*mark|burn\s*mark/i.test(questionSentences)
+        || /anything else/i.test(questionSentences)
+        || /share.*feedback|leave.*feedback|feedback.*experience|feedback.*today/i.test(questionSentences));
 
     // Show MCB reference images when the user says they don't know what MCB is,
     // where to find it, or what it looks like.
