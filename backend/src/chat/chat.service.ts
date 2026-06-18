@@ -209,7 +209,10 @@ export class ChatService implements OnModuleInit {
           : null;
 
     const showYesNo = !closed && lastBotMsg.includes('?')
-      && (/\bMCB\b/i.test(lastBotMsg) || /burnt|black\s*mark|burn\s*mark/i.test(lastBotMsg));
+      && (/\bMCB\b/i.test(lastBotMsg)
+        || /burnt|black\s*mark|burn\s*mark/i.test(lastBotMsg)
+        || /anything else/i.test(lastBotMsg)
+        || /share.*feedback|leave.*feedback|feedback.*experience|feedback.*today/i.test(lastBotMsg));
 
     // Show MCB reference images when the user says they don't know what MCB is,
     // where to find it, or what it looks like.
