@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { readFileSync, writeFileSync } from 'fs';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { SPINWISE_SYSTEM_PROMPT } from '../chat/prompt';
 import { TOOL_SCHEMAS } from './tool-schemas';
 import { ToolRegistry } from './tools.registry';
@@ -8,12 +8,14 @@ import { ChatMessage, ChatSession, SessionService } from '../session/session.ser
 import { Attachment } from '../chat/dto';
 import { CrmClient } from '../crm/crm.client';
 
+type OAIMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+
 @Injectable()
 export class LlmService implements OnModuleInit {
   private static readonly MAX_TOOL_ITERATIONS = 8;
 
   private readonly log = new Logger(LlmService.name);
-  private client!: Anthropic;
+  private client!: OpenAI;
   private model!: string;
   private maxTokens!: number;
 
@@ -28,32 +30,35 @@ export class LlmService implements OnModuleInit {
     if (!apiKey) {
       this.log.warn('LLM_API_KEY not set — chat will return a stub response.');
     }
-    this.client = new Anthropic({ apiKey: apiKey ?? 'missing-key' });
-    this.model = process.env.LLM_MODEL ?? 'claude-haiku-4-5-20251001';
+    this.client = new OpenAI({ apiKey: apiKey ?? 'missing-key' });
+    this.model = process.env.LLM_MODEL ?? 'gpt-4o-mini';
     this.maxTokens = Number(process.env.LLM_MAX_TOKENS ?? 800);
   }
 
   // ─── Token usage logger ────────────────────────────────────────────────────
-  // Pricing per million tokens (USD) — update if model changes
   private static readonly PRICING: Record<string, { inputUSD: number; outputUSD: number }> = {
-    'claude-haiku-4-5-20251001': { inputUSD: 0.80,  outputUSD: 4.00  },
-    'claude-sonnet-4-6':         { inputUSD: 3.00,  outputUSD: 15.00 },
-    'claude-opus-4-8':           { inputUSD: 15.00, outputUSD: 75.00 },
+    'gpt-4o-mini':  { inputUSD: 0.15,  outputUSD: 0.60  },
+    'gpt-4o':       { inputUSD: 2.50,  outputUSD: 10.00 },
+    'gpt-4-turbo':  { inputUSD: 10.00, outputUSD: 30.00 },
   };
-  private static readonly USD_TO_INR = 84;
+  private static readonly USD_TO_INR = 90;
   private static readonly TOKEN_LOG  = '/tmp/spinwise-token-usage.log';
   private static readonly MAX_RECORDS = 100;
 
-  private logTokenUsage(sessionId: string, inputTokens: number, outputTokens: number, iterations: number) {
+  private logTokenUsage(sessionId: string, inputTokens: number, outputTokens: number, cachedTokens: number, iterations: number) {
     const pricing = LlmService.PRICING[this.model] ?? { inputUSD: 0, outputUSD: 0 };
-    const costUSD = (inputTokens / 1_000_000) * pricing.inputUSD
-                  + (outputTokens / 1_000_000) * pricing.outputUSD;
+    // Cached tokens cost 50% of regular input price (OpenAI automatic caching)
+    const billableInput = inputTokens - cachedTokens;
+    const costUSD = (billableInput / 1_000_000) * pricing.inputUSD
+                  + (cachedTokens  / 1_000_000) * (pricing.inputUSD * 0.5)
+                  + (outputTokens  / 1_000_000) * pricing.outputUSD;
     const costINR = costUSD * LlmService.USD_TO_INR;
     const record = {
       timestamp:    new Date().toISOString(),
       sessionId,
       model:        this.model,
       inputTokens,
+      cachedTokens,
       outputTokens,
       totalTokens:  inputTokens + outputTokens,
       costUSD:      +costUSD.toFixed(6),
@@ -79,47 +84,63 @@ export class LlmService implements OnModuleInit {
 
     this.log.log(
       `[tokens] session=${sessionId.slice(0, 8)} ` +
-      `in=${inputTokens} out=${outputTokens} total=${inputTokens + outputTokens} ` +
+      `in=${inputTokens} cached=${cachedTokens} out=${outputTokens} total=${inputTokens + outputTokens} ` +
       `cost=₹${costINR.toFixed(4)} ($${costUSD.toFixed(6)}) iters=${iterations}`,
     );
   }
   // ──────────────────────────────────────────────────────────────────────────
 
-  /** Build the shared request params (system prompt + tools + messages). */
-  private async buildRequestParams(sessionId: string, attachments?: Attachment[]) {
+  /** Build the messages array with system prompt prepended. */
+  private async buildMessages(sessionId: string, attachments?: Attachment[]): Promise<OAIMessage[]> {
     const categories = await this.crm.getCategoriesForDisplay();
     const systemPrompt = SPINWISE_SYSTEM_PROMPT + this.buildCategoryBlock(categories);
     const session = this.sessions.get(sessionId);
-    const messages = this.toAnthropicMessages(session.transcript, session.slots);
+    const history = this.toOpenAIMessages(session.transcript, session.slots);
+
     if (attachments?.length) {
-      const last = messages[messages.length - 1];
+      const last = history[history.length - 1];
       if (last?.role === 'user') {
         last.content = this.buildMultiModalContent(last.content as string, attachments);
       }
     }
-    const system = [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }] as unknown as Anthropic.TextBlockParam[];
-    const tools = [
-      ...TOOL_SCHEMAS.slice(0, -1),
-      { ...TOOL_SCHEMAS[TOOL_SCHEMAS.length - 1], cache_control: { type: 'ephemeral' } },
-    ] as Anthropic.Tool[];
-    return { system, tools, messages };
+
+    return [
+      { role: 'system', content: systemPrompt },
+      ...history,
+    ];
   }
 
-  /** Execute tool_use blocks and append results to the messages array in-place. */
-  private async runTools(sessionId: string, response: Anthropic.Message, messages: Anthropic.MessageParam[]) {
-    const toolUseBlocks = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
-    messages.push({ role: 'assistant', content: response.content });
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
-    for (const tu of toolUseBlocks) {
+  /** Execute tool calls and append results to messages array in-place. */
+  private async runTools(
+    sessionId: string,
+    toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[],
+    assistantContent: string | null,
+    messages: OAIMessage[],
+  ) {
+    // Append assistant message with tool_calls
+    messages.push({
+      role: 'assistant',
+      content: assistantContent,
+      tool_calls: toolCalls,
+    });
+
+    // Execute each tool and append result
+    for (const tc of toolCalls) {
+      const tcFn = tc as { id: string; type: string; function: { name: string; arguments: string } };
+      if (tcFn.type !== 'function') continue;
       let result: unknown;
       try {
-        result = await this.tools.dispatch(sessionId, tu.name, tu.input as Record<string, unknown>);
+        const args = JSON.parse(tcFn.function.arguments) as Record<string, unknown>;
+        result = await this.tools.dispatch(sessionId, tcFn.function.name, args);
       } catch (e) {
         result = { error: (e as Error).message };
       }
-      toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(result) });
+      messages.push({
+        role: 'tool',
+        tool_call_id: tc.id,
+        content: JSON.stringify(result),
+      });
     }
-    messages.push({ role: 'user', content: toolResults });
   }
 
   /** Finalize the text response: strip [END], close session if needed, append to transcript. */
@@ -137,21 +158,31 @@ export class LlmService implements OnModuleInit {
 
   async respond(sessionId: string, attachments?: Attachment[]): Promise<string> {
     if (!process.env.LLM_API_KEY) return this.stubReply(sessionId);
-    const { system, tools, messages } = await this.buildRequestParams(sessionId, attachments);
+    const messages = await this.buildMessages(sessionId, attachments);
 
     for (let iter = 0; iter < LlmService.MAX_TOOL_ITERATIONS; iter++) {
-      let response: Anthropic.Message;
+      let response: OpenAI.Chat.Completions.ChatCompletion;
       try {
-        response = await this.client.messages.create({ model: this.model, max_tokens: this.maxTokens, system, tools, messages });
+        response = await this.client.chat.completions.create({
+          model: this.model,
+          max_tokens: this.maxTokens,
+          messages,
+          tools: TOOL_SCHEMAS,
+        });
       } catch (e) {
-        this.log.error(`Anthropic API error: ${(e as Error).message}`);
+        this.log.error(`OpenAI API error: ${(e as Error).message}`);
         const errReply = 'Sorry, something went wrong on our end. Please try again.';
         this.sessions.append(sessionId, { role: 'assistant', content: errReply });
         return errReply;
       }
-      if (response.stop_reason === 'tool_use') { await this.runTools(sessionId, response, messages); continue; }
-      const raw = response.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map((b) => b.text).join('\n');
-      return this.finalizeText(sessionId, raw).text;
+
+      const choice = response.choices[0];
+      if (choice.finish_reason === 'tool_calls' && choice.message.tool_calls?.length) {
+        await this.runTools(sessionId, choice.message.tool_calls, choice.message.content, messages);
+        continue;
+      }
+
+      return this.finalizeText(sessionId, choice.message.content ?? '').text;
     }
 
     const fallback = 'I am having trouble completing that step. Would you like me to raise a complaint and have an engineer follow up?';
@@ -170,34 +201,76 @@ export class LlmService implements OnModuleInit {
       onChunk(reply);
       return { text: reply, closed: false };
     }
-    const { system, tools, messages } = await this.buildRequestParams(sessionId, attachments);
+    const messages = await this.buildMessages(sessionId, attachments);
 
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
+    let totalCachedTokens = 0;
 
     for (let iter = 0; iter < LlmService.MAX_TOOL_ITERATIONS; iter++) {
       const chunks: string[] = [];
-      let response: Anthropic.Message;
+      const toolCallsMap: Record<number, { id: string; name: string; arguments: string }> = {};
+      let finishReason: string | null = null;
+
       try {
-        const stream = this.client.messages.stream({ model: this.model, max_tokens: this.maxTokens, system, tools, messages });
-        // Forward text deltas to the caller as they arrive.
-        // Tool-use iterations produce no text, so onChunk is effectively a no-op there.
-        stream.on('text', (delta: string) => { onChunk(delta); chunks.push(delta); });
-        response = await stream.finalMessage();
+        const stream = await this.client.chat.completions.create({
+          model: this.model,
+          max_tokens: this.maxTokens,
+          messages,
+          tools: TOOL_SCHEMAS,
+          stream: true,
+          stream_options: { include_usage: true },
+        });
+
+        for await (const chunk of stream) {
+          // Accumulate usage from the final chunk
+          if (chunk.usage) {
+            totalInputTokens  += chunk.usage.prompt_tokens ?? 0;
+            totalOutputTokens += chunk.usage.completion_tokens ?? 0;
+            totalCachedTokens += (chunk.usage as any).prompt_tokens_details?.cached_tokens ?? 0;
+          }
+
+          const choice = chunk.choices?.[0];
+          if (!choice) continue;
+          if (choice.finish_reason) finishReason = choice.finish_reason;
+
+          const delta = choice.delta;
+
+          if (delta.content) {
+            onChunk(delta.content);
+            chunks.push(delta.content);
+          }
+
+          if (delta.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              if (!toolCallsMap[tc.index]) {
+                toolCallsMap[tc.index] = { id: '', name: '', arguments: '' };
+              }
+              if (tc.id)               toolCallsMap[tc.index].id        += tc.id;
+              if (tc.function?.name)   toolCallsMap[tc.index].name      += tc.function.name;
+              if (tc.function?.arguments) toolCallsMap[tc.index].arguments += tc.function.arguments;
+            }
+          }
+        }
       } catch (e) {
-        this.log.error(`Anthropic stream error: ${(e as Error).message}`);
+        this.log.error(`OpenAI stream error: ${(e as Error).message}`);
         const errReply = 'Sorry, something went wrong on our end. Please try again.';
         onChunk(errReply);
         this.sessions.append(sessionId, { role: 'assistant', content: errReply });
         return { text: errReply, closed: false };
       }
 
-      totalInputTokens  += response.usage?.input_tokens  ?? 0;
-      totalOutputTokens += response.usage?.output_tokens ?? 0;
+      if (finishReason === 'tool_calls') {
+        const toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] = Object.values(toolCallsMap).map((tc) => ({
+          id: tc.id,
+          type: 'function' as const,
+          function: { name: tc.name, arguments: tc.arguments },
+        }));
+        await this.runTools(sessionId, toolCalls, chunks.join('') || null, messages);
+        continue;
+      }
 
-      if (response.stop_reason === 'tool_use') { await this.runTools(sessionId, response, messages); continue; }
-
-      this.logTokenUsage(sessionId, totalInputTokens, totalOutputTokens, iter + 1);
+      this.logTokenUsage(sessionId, totalInputTokens, totalOutputTokens, totalCachedTokens, iter + 1);
       return this.finalizeText(sessionId, chunks.join(''));
     }
 
@@ -208,31 +281,22 @@ export class LlmService implements OnModuleInit {
   }
 
   /**
-   * Build a multi-block content array for a user message that includes file attachments.
-   * Images → image blocks (vision). PDFs → document blocks. Videos → text note (unsupported by Claude).
-   */
-  /**
-   * Build a multi-block content array for a user message that includes file attachments.
-   * Uses the SDK's Param types (input), not ContentBlock (output/response).
+   * Build a multi-modal content array for a user message that includes file attachments.
+   * Images → image_url blocks. PDFs / videos → text note.
    */
   private buildMultiModalContent(
     text: string,
     attachments: Attachment[],
-  ): Array<Anthropic.Messages.ImageBlockParam | Anthropic.Messages.TextBlockParam> {
-    const blocks: Array<Anthropic.Messages.ImageBlockParam | Anthropic.Messages.TextBlockParam> = [];
+  ): OpenAI.Chat.Completions.ChatCompletionContentPart[] {
+    const blocks: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [];
 
     for (const att of attachments) {
       if (att.type === 'image') {
-        const supported = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        const mediaType = supported.includes(att.mediaType)
-          ? (att.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp')
-          : 'image/jpeg';
         blocks.push({
-          type: 'image',
-          source: { type: 'base64', media_type: mediaType, data: att.data },
+          type: 'image_url',
+          image_url: { url: `data:${att.mediaType};base64,${att.data}` },
         });
       } else if (att.type === 'pdf') {
-        // PDFs sent as text note — model reads PDF content injected by the browser if supported
         blocks.push({
           type: 'text',
           text: `[PDF document attached: "${att.name}". Analyze its content and extract any relevant information for troubleshooting.]`,
@@ -249,11 +313,11 @@ export class LlmService implements OnModuleInit {
     return blocks;
   }
 
-  private toAnthropicMessages(
+  private toOpenAIMessages(
     transcript: ChatMessage[],
     slots: ChatSession['slots'],
-  ): Anthropic.MessageParam[] {
-    const msgs = transcript
+  ): OAIMessage[] {
+    const msgs: OAIMessage[] = transcript
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
@@ -262,9 +326,6 @@ export class LlmService implements OnModuleInit {
     const DROP = 8;
     const trimmed = msgs.length > TRIM_AFTER ? msgs.slice(DROP) : msgs;
 
-    // Inject a persistent SESSION_STATE block so the LLM always knows which
-    // customer / charger it is dealing with — survives trimming and prevents
-    // repeated lookup_customer / get_ticket_summary calls.
     const ctxParts: string[] = [];
     if (slots.customerName)            ctxParts.push(`name=${slots.customerName}`);
     if (slots.mobile)                  ctxParts.push(`mobile=${slots.mobile}`);
@@ -287,8 +348,6 @@ export class LlmService implements OnModuleInit {
               ? 'Mobile is already known. Call lookup_customer immediately using the mobile from SESSION_STATE — do NOT ask for name or mobile again. Then call get_ticket_summary once the charger is confirmed.'
               : 'Call get_ticket_summary once immediately after the customer selects a charger.';
 
-      // Build a compact ticket history block so the LLM can always show timeline
-      // even in later turns (tool results are not stored in the session transcript).
       let ticketBlock = '';
       if (slots.recentTickets && slots.recentTickets.length > 0) {
         const lines = slots.recentTickets.map((t) => {
@@ -316,7 +375,6 @@ export class LlmService implements OnModuleInit {
     return trimmed;
   }
 
-  /** Format the server-cached category map as a compact TOON-style block. */
   private buildCategoryBlock(
     categories: Array<{ category: string; subCategories: string[] }>,
   ): string {

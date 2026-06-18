@@ -54,6 +54,42 @@ export function useChat() {
     return () => window.removeEventListener('beforeunload', handleUnload);
   }, [closed]);
 
+  // ── General idle timer: 2 min nudge, 3 min close ──────────────────────────
+  const idleIntervalRef = useRef(null);
+  useEffect(() => {
+    if (idleIntervalRef.current) { clearInterval(idleIntervalRef.current); idleIntervalRef.current = null; }
+    if (closed) return;
+    idleIntervalRef.current = setInterval(async () => {
+      if (closed || !sessionId.current) return;
+      const silentMs = Date.now() - lastActivity.current;
+      if (silentMs >= 600_000) {
+        // 10 min — close with rating form
+        clearInterval(idleIntervalRef.current);
+        idleIntervalRef.current = null;
+        idleActive.current = false;
+        setIdleWarning(false);
+        setClosed(true);
+        setTimeout(() => setShowReview(true), 400);
+      } else if (silentMs >= 300_000 && !idleActive.current) {
+        // 5 min — fetch session to surface "Are you still there?" from backend
+        try {
+          const res = await fetch(`${API}/chat/session/${sessionId.current}`);
+          if (res.ok) {
+            const data = await res.json();
+            const transcript = data.transcript ?? [];
+            const lastMsg = transcript[transcript.length - 1];
+            if (lastMsg?.role === 'assistant' && lastMsg.content.startsWith('Are you still there')) {
+              pushMsg('bot', lastMsg.content);
+              idleActive.current = true;
+              setIdleWarning(true);
+            }
+          }
+        } catch { /* ignore */ }
+      }
+    }, 30_000);
+    return () => { if (idleIntervalRef.current) clearInterval(idleIntervalRef.current); };
+  }, [closed]);
+
   // ── NOC handoff timer: show idle warning 2 minutes after NOC is triggered ──
   useEffect(() => {
     if (nocTimerRef.current) { clearTimeout(nocTimerRef.current); nocTimerRef.current = null; }
@@ -185,7 +221,7 @@ export function useChat() {
 
     const appendChunk = (chunk) => {
       if (!botAdded) {
-        setMessages((prev) => [...prev, { id: botId, role: 'bot', text: chunk }]);
+        setMessages((prev) => [...prev, { id: botId, role: 'bot', text: chunk, ts: Date.now() }]);
         botAdded = true;
         setTyping(false); // hide typing dots once first text appears
       } else {
