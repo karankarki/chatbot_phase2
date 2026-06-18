@@ -331,7 +331,9 @@ export class LlmService implements OnModuleInit {
     if (slots.mobile)                  ctxParts.push(`mobile=${slots.mobile}`);
     if (slots.chargerSerial)           ctxParts.push(`charger_confirmed=${slots.chargerSerial}${slots.chargerDescription ? ` (${slots.chargerDescription})` : ''}`);
     if (slots.warrantyStatus)          ctxParts.push(`warranty=${slots.warrantyStatus} until ${slots.warrantyEndDate ?? 'N/A'}`);
-    if (slots.hasActiveTicket != null) ctxParts.push(`active_ticket=${slots.hasActiveTicket ? (slots.activeTicketNo ?? 'yes') : 'none'}`);
+    // active_ticket is intentionally NOT injected into SESSION_STATE.
+    // The LLM must always call get_ticket_summary at Stage 5 to get a fresh check —
+    // never rely on remembered state which can be misread and cause hallucination.
     if (slots.ledState)                ctxParts.push(`led=${slots.ledState}`);
     if (slots.alarm)                   ctxParts.push(`alarm=${slots.alarm}`);
 
@@ -341,9 +343,9 @@ export class LlmService implements OnModuleInit {
       const directive = slots.restored
         ? 'RESUMED CONVERSATION — the customer is returning to a previous chat. All their details are already known. Do NOT re-introduce yourself. Do NOT ask for name, mobile, or serial again. Do NOT call lookup_customer or get_ticket_summary. Just acknowledge you are picking up where you left off and continue naturally from the last message in the transcript.'
         : chargerConfirmed && ticketFetched
-          ? 'Do NOT call lookup_customer or get_ticket_summary again — charger and ticket history already confirmed.'
+          ? 'Do NOT call lookup_customer again — charger already confirmed. You MAY call get_ticket_summary again at Stage 5 (ticket creation) to get a fresh check — always use the tool result, never guess.'
           : chargerConfirmed && !ticketFetched
-            ? `Charger ${slots.chargerSerial}${slots.chargerDescription ? ` (${slots.chargerDescription})` : ''} is already confirmed. Start your reply by saying "You have selected charger: ${slots.chargerSerial}${slots.chargerDescription ? ` — ${slots.chargerDescription}` : ''}. Let me fetch your service history." Then call get_ticket_summary for this serial, then ask what issue they are facing — do NOT ask for name or mobile.`
+            ? `Charger ${slots.chargerSerial}${slots.chargerDescription ? ` (${slots.chargerDescription})` : ''} is already confirmed. Call get_ticket_summary for this serial immediately, then continue naturally from the conversation — do NOT re-ask what issue they are facing if it has already been described earlier in this conversation. Do NOT ask for name or mobile.`
             : slots.mobile
               ? 'Mobile is already known. Call lookup_customer immediately using the mobile from SESSION_STATE — do NOT ask for name or mobile again. Then call get_ticket_summary once the charger is confirmed.'
               : 'Call get_ticket_summary once immediately after the customer selects a charger.';

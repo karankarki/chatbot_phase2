@@ -174,7 +174,14 @@ export class ToolRegistry {
     // trying to interpret raw ticket statuses itself (which leads to false positives on
     // ambiguous statuses like "Cancelled" with "Request Approved" timeline entries).
     const { activeTicketNo: _a, ...llmVisible } = res as unknown as Record<string, unknown>;
-    return llmVisible;
+    return {
+      ...llmVisible,
+      // Explicit action signals — LLM must use these, never guess from memory
+      can_raise_new_ticket: !res.hasActiveTicket,
+      action_instruction: res.hasActiveTicket
+        ? `BLOCKED: Do NOT call create_ticket. Tell the customer exactly: "I can see there is already an open ticket for this charger. We are not able to raise a new one until the existing ticket is resolved. Our team is already working on it."`
+        : `ALLOWED: You may proceed to call create_ticket.`,
+    };
   }
 
   // ─── NOC handoff ───────────────────────────────────────────────────────────

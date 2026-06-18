@@ -14,7 +14,9 @@ export default function App() {
     messages, typing, closed,
     chargerOptions, showIssueTypes, inputHint, isSpinApp,
     idleWarning, showReview, showYesNo, showMcbImages,
+    hasPreviousChat,
     startSession, sendMessage, stayActive, closeFromIdle, submitReview,
+    resumeChat, startFresh,
   } = useChat();
 
   useEffect(() => { startSession(); }, []);
@@ -26,6 +28,7 @@ export default function App() {
   const showQuickReplies =
     !typing &&
     !closed &&
+    !hasPreviousChat &&
     (
       (messages.length === 1 && messages[0]?.role === 'bot' && !(isSpinApp && spinAppHasSerial)) ||
       showIssueTypes
@@ -62,6 +65,14 @@ export default function App() {
         />
       )}
 
+      {/* Previous-chat choice buttons — shown before user picks Continue or Start New */}
+      {hasPreviousChat && !closed && (
+        <div className="quick-replies">
+          <button className="quick-reply-btn" onClick={resumeChat}>Continue previous chat</button>
+          <button className="quick-reply-btn" onClick={startFresh}>Start new</button>
+        </div>
+      )}
+
       {/* Bottom area: review > closed banner > composer */}
       {closed && showReview ? (
         <ReviewPanel onSubmit={submitReview} onRestart={startSession} />
@@ -71,7 +82,7 @@ export default function App() {
           <button onClick={startSession}>Start a new chat</button>
         </div>
       ) : (
-        <ChatComposer onSend={sendMessage} disabled={typing || closed || showQuickReplies} inputHint={inputHint} />
+        <ChatComposer onSend={sendMessage} disabled={typing || closed || showQuickReplies || hasPreviousChat} inputHint={inputHint} />
       )}
 
       {/* Idle warning overlay — sits above the composer */}

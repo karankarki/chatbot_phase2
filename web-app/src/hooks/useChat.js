@@ -30,6 +30,7 @@ export function useChat() {
   const [showYesNo, setShowYesNo]           = useState(false);
   const [showMcbImages, setShowMcbImages]   = useState(false);
   const [nocHandoffActive, setNocHandoffActive] = useState(false);
+  const [hasPreviousChat, setHasPreviousChat]   = useState(false);
 
   const sessionId    = useRef(null);
   const idSeq        = useRef(0);
@@ -141,6 +142,7 @@ export function useChat() {
     setShowYesNo(false);
     setShowMcbImages(false);
     setNocHandoffActive(false);
+    setHasPreviousChat(false);
     lastActivity.current = Date.now();
     idleActive.current   = false;
 
@@ -160,19 +162,14 @@ export function useChat() {
     const data = await res.json();
     sessionId.current = data.sessionId;
 
-    // Restore previous conversation if available (Spin App with history)
-    if (data.restoredMessages?.length > 0) {
-      const now = Date.now();
-      const restoredMsgs = data.restoredMessages.map((m, i) => ({
-        id: nextId(),
-        role: m.role,
-        text: m.text,
-        ts: now - (data.restoredMessages.length - i) * 1000,
-      }));
-      setMessages([
-        ...restoredMsgs,
-        { id: nextId(), role: 'bot', text: 'Welcome back! Continuing from your previous conversation.', ts: now },
-      ]);
+    // If an open previous conversation exists, ask user whether to continue or start fresh.
+    if (data.hasPreviousChat) {
+      const name = prefill?.name;
+      const greeting = name
+        ? `Hello ${name}! I noticed you have an unfinished conversation. Would you like to continue where you left off?`
+        : `Welcome back! I noticed you have an unfinished conversation. Would you like to continue where you left off?`;
+      setMessages([{ id: nextId(), role: 'bot', text: greeting, ts: Date.now() }]);
+      setHasPreviousChat(true);
     } else {
       // Build greeting based on what data is available
       const name = prefill?.name;
@@ -192,6 +189,43 @@ export function useChat() {
 
     if (data.chargerOptions?.length > 0) setChargerOptions(data.chargerOptions);
     if (data.showIssueTypes) setShowIssueTypes(true);
+  }, []);
+
+  // User chose "Continue previous chat" — silently restore history then open composer.
+  const resumeChat = useCallback(async () => {
+    setHasPreviousChat(false);
+    setShowIssueTypes(false);
+    try {
+      const res = await fetch(`${API}/chat/session/${sessionId.current}/resume`, { method: 'POST' });
+      const data = await res.json();
+      if (data.messages?.length > 0) {
+        const now = Date.now();
+        const restored = data.messages.map((m, i) => ({
+          id: nextId(),
+          role: m.role,
+          text: m.text,
+          ts: now - (data.messages.length - i) * 1000,
+        }));
+        setMessages([
+          ...restored,
+          { id: nextId(), role: 'bot', text: 'Welcome back! Continuing from where you left off.', ts: now },
+        ]);
+      }
+    } catch {
+      // If restore fails, just clear the flag and let the user chat fresh
+    }
+  }, []);
+
+  // User chose "Start new" — show fresh greeting + issue type buttons.
+  const startFresh = useCallback(() => {
+    const prefill = getSpinAppPrefill();
+    const name = prefill?.name;
+    const greeting = name
+      ? `Hello ${name}! I'm SpinWise, Exicom's virtual assistant.\n\nPlease select the issue you're facing:`
+      : "Hello! Welcome to Exicom Customer Care.\n\nI'm SpinWise, Exicom's virtual assistant, here to help you get charging again quickly.\n\nPlease select the issue you're facing:";
+    setHasPreviousChat(false);
+    setMessages([{ id: nextId(), role: 'bot', text: greeting, ts: Date.now() }]);
+    setShowIssueTypes(true);
   }, []);
 
   const sendMessage = useCallback(async (text, attachments = []) => {
@@ -303,6 +337,8 @@ export function useChat() {
     messages, typing, closed,
     chargerOptions, showIssueTypes, inputHint, isSpinApp,
     idleWarning, showReview, showYesNo, showMcbImages, nocHandoffActive,
+    hasPreviousChat,
     startSession, sendMessage, stayActive, closeFromIdle, submitReview,
+    resumeChat, startFresh,
   };
 }

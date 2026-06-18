@@ -40,6 +40,11 @@ export class ChatController {
     res.end();
   }
 
+  @Post('session/:id/resume')
+  resume(@Param('id') id: string) {
+    return this.chat.resumeSession(id);
+  }
+
   @Post('session/:id/rating')
   async rating(
     @Param('id') id: string,

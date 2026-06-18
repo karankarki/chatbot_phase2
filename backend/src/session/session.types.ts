@@ -64,5 +64,7 @@ export interface ChatSession {
     handoffRequested?: boolean;
     ticketId?: string;
     closed?: boolean;
+    /** Previous conversation messages waiting for user to choose Continue vs Start New. Not yet in transcript. */
+    pendingHistory?: Array<{ role: string; content: string }>;
   };
 }

@@ -73,38 +73,21 @@ export class ChatService implements OnModuleInit {
     const chargerOptions = chargers && chargers.length > 1 ? chargers : undefined;
     const showIssueTypes = !!autoSerial && !chargerOptions;
 
-    // Fetch and restore chat history — in-app (Spin App) with single serial only.
-    // Web widget never restores; multi-serial restore happens after charger selection in sendStream.
-    let restoredMessages: Array<{ role: 'user' | 'bot'; text: string }> | undefined;
+    // Fetch chat history for in-app (Spin App) single-serial sessions.
+    // If an open (non-ended) conversation exists, store it as pendingHistory and return
+    // hasPreviousChat:true so the frontend can show "Continue / Start new" buttons.
+    // The history is NOT loaded into the transcript until the user chooses "Continue".
+    let hasPreviousChat = false;
     if (dto.channel === 'in-app' && dto.prefillMobile && autoSerial && !chargerOptions) {
       const history = await this.crm.fetchChatHistory(dto.prefillMobile, autoSerial);
       if (history.found && !history.isClosed && history.messages?.length) {
-        for (const m of history.messages) {
-          this.sessions.append(session.id, {
-            role: m.role === 'assistant' ? 'assistant' : 'user',
-            content: m.content,
-          });
-        }
-        restoredMessages = history.messages.map((m) => ({
-          role: (m.role === 'assistant' ? 'bot' : 'user') as 'user' | 'bot',
-          text: m.content,
-        }));
-        this.log.log(`[${session.id}] restored ${history.messages.length} msgs from chat history`);
-
-        // Pre-populate ticket info so the SESSION_STATE directive doesn't tell the LLM
-        // to re-announce the charger or call get_ticket_summary on the first resumed turn.
-        const ticketInfo = await this.crm.getTicketSummary(autoSerial);
-        this.sessions.updateSlots(session.id, {
-          hasActiveTicket: ticketInfo.hasActiveTicket,
-          activeTicketNo: ticketInfo.activeTicketNo,
-          activeTicketStatus: ticketInfo.activeTicketStatus,
-          recentTickets: ticketInfo.recentTickets,
-          restored: true,
-        });
+        this.sessions.updateSlots(session.id, { pendingHistory: history.messages });
+        hasPreviousChat = true;
+        this.log.log(`[${session.id}] found ${history.messages.length} pending msgs — waiting for user choice`);
       }
     }
 
-    return { sessionId: session.id, channel: session.channel, chargerOptions, showIssueTypes, restoredMessages };
+    return { sessionId: session.id, channel: session.channel, chargerOptions, showIssueTypes, hasPreviousChat };
   }
 
   async sendStream(
@@ -232,6 +215,40 @@ export class ChatService implements OnModuleInit {
     const ticketId = s.slots.ticketId;
     const nocHandoffActive = !closed && !!s.slots.handoffRequested;
     return { sessionId, closed, ticketId, chargerOptions, inputHint, showIssueTypes, showYesNo, showMcbImages, nocHandoffActive };
+  }
+
+  // Called when the user explicitly chooses "Continue previous chat".
+  // Moves pendingHistory into the live transcript and pre-populates ticket slots.
+  async resumeSession(sessionId: string): Promise<{ messages: Array<{ role: 'user' | 'bot'; text: string }> }> {
+    const s = this.sessions.get(sessionId);
+    const pending = s.slots.pendingHistory;
+    if (!pending?.length) return { messages: [] };
+
+    for (const m of pending) {
+      this.sessions.append(sessionId, {
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content,
+      });
+    }
+
+    if (s.slots.chargerSerial) {
+      const ticketInfo = await this.crm.getTicketSummary(s.slots.chargerSerial);
+      this.sessions.updateSlots(sessionId, {
+        hasActiveTicket: ticketInfo.hasActiveTicket,
+        activeTicketNo: ticketInfo.activeTicketNo,
+        activeTicketStatus: ticketInfo.activeTicketStatus,
+        recentTickets: ticketInfo.recentTickets,
+        restored: true,
+      });
+    }
+
+    this.log.log(`[${sessionId}] user chose Continue — restored ${pending.length} msgs`);
+    return {
+      messages: pending.map((m) => ({
+        role: (m.role === 'assistant' ? 'bot' : 'user') as 'user' | 'bot',
+        text: m.content,
+      })),
+    };
   }
 
   // Called when the user submits a star rating after a closed session.
