@@ -31,6 +31,7 @@ export function useChat() {
   const [showMcbImages, setShowMcbImages]   = useState(false);
   const [nocHandoffActive, setNocHandoffActive] = useState(false);
   const [hasPreviousChat, setHasPreviousChat]   = useState(false);
+  const [showAppStore, setShowAppStore]         = useState(false);
 
   const sessionId    = useRef(null);
   const idSeq        = useRef(0);
@@ -116,16 +117,22 @@ export function useChat() {
     setShowReview(true);
   }, []);
 
-  const submitReview = useCallback(({ rating, feedback }) => {
+  const submitReview = useCallback(async ({ rating, feedback }) => {
     if (sessionId.current) {
-      fetch(`${API}/chat/session/${sessionId.current}/rating`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rating, feedback }),
-      }).catch(() => {});
+      try {
+        const res  = await fetch(`${API}/chat/session/${sessionId.current}/rating`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rating, feedback }),
+        });
+        const data = await res.json();
+        if (data.showAppRating) setShowAppStore(true);
+      } catch { /* ignore */ }
     }
     setShowReview(false);
   }, []);
+
+  const dismissAppStore = useCallback(() => setShowAppStore(false), []);
   // ───────────────────────────────────────────────────────────────────────
 
   const startSession = useCallback(async () => {
@@ -143,6 +150,7 @@ export function useChat() {
     setShowMcbImages(false);
     setNocHandoffActive(false);
     setHasPreviousChat(false);
+    setShowAppStore(false);
     lastActivity.current = Date.now();
     idleActive.current   = false;
 
@@ -337,8 +345,8 @@ export function useChat() {
     messages, typing, closed,
     chargerOptions, showIssueTypes, inputHint, isSpinApp,
     idleWarning, showReview, showYesNo, showMcbImages, nocHandoffActive,
-    hasPreviousChat,
+    hasPreviousChat, showAppStore,
     startSession, sendMessage, stayActive, closeFromIdle, submitReview,
-    resumeChat, startFresh,
+    resumeChat, startFresh, dismissAppStore,
   };
 }

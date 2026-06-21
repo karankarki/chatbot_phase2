@@ -121,7 +121,9 @@ export class ToolRegistry {
     this.sessions.updateSlots(sessionId, {
       customerId: res.customerId,
       customerName,
-      mobile: !serial ? this.normalizeMobile(rawIdentifier) : undefined,
+      mobile: !serial
+        ? this.normalizeMobile(rawIdentifier)
+        : (res.contactNumber ? this.normalizeMobile(res.contactNumber) : undefined),
       circle: res.circle,
       chargers: res.chargers,
       chargerSerial: res.autoSelectedSerial,

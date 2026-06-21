@@ -51,7 +51,7 @@ export class ChatController {
     @Body() body: { rating: number; feedback?: string },
   ) {
     await this.chat.saveRating(id, body.rating, body.feedback);
-    return { ok: true };
+    return { ok: true, showAppRating: body.rating >= 4 };
   }
 
   // Beacon endpoint — called via navigator.sendBeacon on page close.

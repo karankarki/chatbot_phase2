@@ -7,6 +7,7 @@ import ChargerPicker from './components/ChargerPicker';
 import QuickReplies from './components/QuickReplies';
 import IdleWarning from './components/IdleWarning';
 import ReviewPanel from './components/ReviewPanel';
+import AppStorePrompt from './components/AppStorePrompt';
 import { MCB_NORMAL, MCB_BURNT } from './assets/mcbImages.js';
 
 export default function App() {
@@ -14,9 +15,9 @@ export default function App() {
     messages, typing, closed,
     chargerOptions, showIssueTypes, inputHint, isSpinApp,
     idleWarning, showReview, showYesNo, showMcbImages,
-    hasPreviousChat,
+    hasPreviousChat, showAppStore,
     startSession, sendMessage, stayActive, closeFromIdle, submitReview,
-    resumeChat, startFresh,
+    resumeChat, startFresh, dismissAppStore,
   } = useChat();
 
   useEffect(() => { startSession(); }, []);
@@ -73,9 +74,11 @@ export default function App() {
         </div>
       )}
 
-      {/* Bottom area: review > closed banner > composer */}
+      {/* Bottom area: review > app store prompt > closed banner > composer */}
       {closed && showReview ? (
         <ReviewPanel onSubmit={submitReview} onRestart={startSession} />
+      ) : closed && showAppStore ? (
+        <AppStorePrompt onDismiss={dismissAppStore} onRestart={startSession} />
       ) : closed ? (
         <div className="session-closed">
           Session ended.{' '}

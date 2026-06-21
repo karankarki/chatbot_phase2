@@ -15,7 +15,7 @@ export class LlmService implements OnModuleInit {
   private static readonly MAX_TOOL_ITERATIONS = 8;
 
   private readonly log = new Logger(LlmService.name);
-  private client!: OpenAI;
+  private client: OpenAI | null = null;
   private model!: string;
   private maxTokens!: number;
 
@@ -29,8 +29,9 @@ export class LlmService implements OnModuleInit {
     const apiKey = process.env.LLM_API_KEY;
     if (!apiKey) {
       this.log.warn('LLM_API_KEY not set — chat will return a stub response.');
+    } else {
+      this.client = new OpenAI({ apiKey });
     }
-    this.client = new OpenAI({ apiKey: apiKey ?? 'missing-key' });
     this.model = process.env.LLM_MODEL ?? 'gpt-4o-mini';
     this.maxTokens = Number(process.env.LLM_MAX_TOKENS ?? 800);
   }
@@ -157,13 +158,14 @@ export class LlmService implements OnModuleInit {
   }
 
   async respond(sessionId: string, attachments?: Attachment[]): Promise<string> {
-    if (!process.env.LLM_API_KEY) return this.stubReply(sessionId);
+    const client = this.client;
+    if (!client) return this.stubReply(sessionId);
     const messages = await this.buildMessages(sessionId, attachments);
 
     for (let iter = 0; iter < LlmService.MAX_TOOL_ITERATIONS; iter++) {
       let response: OpenAI.Chat.Completions.ChatCompletion;
       try {
-        response = await this.client.chat.completions.create({
+        response = await client.chat.completions.create({
           model: this.model,
           max_tokens: this.maxTokens,
           messages,
@@ -196,7 +198,8 @@ export class LlmService implements OnModuleInit {
     onChunk: (text: string) => void,
     attachments?: Attachment[],
   ): Promise<{ text: string; closed: boolean }> {
-    if (!process.env.LLM_API_KEY) {
+    const client = this.client;
+    if (!client) {
       const reply = this.stubReply(sessionId);
       onChunk(reply);
       return { text: reply, closed: false };
@@ -213,7 +216,7 @@ export class LlmService implements OnModuleInit {
       let finishReason: string | null = null;
 
       try {
-        const stream = await this.client.chat.completions.create({
+        const stream = await client.chat.completions.create({
           model: this.model,
           max_tokens: this.maxTokens,
           messages,
@@ -313,6 +316,67 @@ export class LlmService implements OnModuleInit {
     return blocks;
   }
 
+  /**
+   * Scan the transcript and return a list of topics already answered by the customer.
+   * Injected as [ALREADY_COVERED] so the LLM knows not to re-ask.
+   */
+  private buildAnsweredQuestionsBlock(transcript: ChatMessage[]): string {
+    const covered = new Set<string>();
+
+    for (let i = 0; i < transcript.length; i++) {
+      const msg = transcript[i];
+
+      // When the bot asks a question and there is a subsequent user reply, mark the topic.
+      if (msg.role === 'assistant' && msg.content.includes('?')) {
+        const hasReply = transcript.slice(i + 1).some((m) => m.role === 'user');
+        if (!hasReply) continue;
+
+        const low = msg.content.toLowerCase();
+        if (/burnt|black\s*mark|scorch|burn\s*mark/.test(low))          covered.add('burnt or black marks');
+        if (/\bMCB\b/.test(msg.content))                                 covered.add('MCB status');
+        if (/led|colour|color|light.*blink|blink.*light/.test(low))      covered.add('LED colour and pattern');
+        if (/alarm|fault name/.test(low))                                covered.add('alarm or fault name');
+        if (/serial|sticker/.test(low))                                  covered.add('charger serial');
+        if (/mobile|phone number|registered number/.test(low))           covered.add('mobile number');
+        if (/your name|may i know your name|what.?s your name/.test(low)) covered.add('customer name');
+        if (/is it charging|charging now|started charging/.test(low))    covered.add('whether charging now');
+        if (/anything else|is there anything/.test(low))                 covered.add('anything else needed');
+        if (/restart|switch.*off|turn.*off|mcb.*off/.test(low))          covered.add('MCB restart step');
+        if (/issue|problem|facing|trouble|complaint/.test(low))          covered.add('issue description');
+        if (/vehicle|car|model.*vehicle|ev\b/.test(low))                 covered.add('vehicle type');
+        if (/which charger|select.*charger|charger.*issue/.test(low))    covered.add('charger selection');
+        if (/rated current|current setting/.test(low))                   covered.add('rated current setting');
+      }
+
+      // When the user explicitly provides information, mark it as covered.
+      if (msg.role === 'user') {
+        const low = msg.content.toLowerCase();
+        if (/\b(red|green|blue|white|yellow|cyan|pink)\b.*(led|light|blink|solid|flash)/i.test(msg.content) ||
+            /\b(led|light)\b.*(red|green|blue|white|yellow|cyan|pink)\b/i.test(msg.content)) {
+          covered.add('LED colour and pattern');
+        }
+        if (/\b(earth|mains\s*fail|mains\s*low|mains\s*high|phase\s*fail|pwm\s*fault|weld|temperature\s*high|emergency|spd\b|connectivity|mfu|gsm|wifi\s*ble|ext\s*eep|ext\s*rs|em\s*comm|em\s*ic|sd\s*card|charging\s*zero)/i.test(msg.content)) {
+          covered.add('alarm or fault name');
+        }
+        if (/restart|restarted|switched.*off|turned.*off|power.*off|mcb.*off|already.*tried|tried.*restart/i.test(low)) {
+          covered.add('restart attempts already tried');
+        }
+        if (/burnt|burn|black\s*mark|scorch|smoke|no.*burn|no.*mark/i.test(low)) {
+          covered.add('burnt or black marks');
+        }
+        if (/\bMCB\b.*(on|off|yes|no|it.?s|checked|switch)/i.test(msg.content) ||
+            /(yes|no|it.?s|checked|on|off).*\bMCB\b/i.test(msg.content)) {
+          covered.add('MCB status');
+        }
+      }
+    }
+
+    if (covered.size === 0) return '';
+
+    const list = [...covered].join('; ');
+    return `\n[ALREADY_COVERED: ${list}. These topics have already been addressed in this conversation. Do NOT ask the customer about any of them again — this is a mandatory check before generating any follow-up question.]`;
+  }
+
   private toOpenAIMessages(
     transcript: ChatMessage[],
     slots: ChatSession['slots'],
@@ -368,12 +432,25 @@ export class LlmService implements OnModuleInit {
         ticketBlock = `\n[TICKET_HISTORY:\n${lines.join('\n')}\n]`;
       }
 
+      const coveredBlock = this.buildAnsweredQuestionsBlock(transcript);
       return [
-        { role: 'user' as const,      content: `[SESSION_STATE: ${ctxParts.join(', ')}. ${directive}]${ticketBlock}` },
-        { role: 'assistant' as const, content: 'Understood — I have the full session context including ticket history.' },
+        { role: 'user' as const,      content: `[SESSION_STATE: ${ctxParts.join(', ')}. ${directive}]${ticketBlock}${coveredBlock}` },
+        { role: 'assistant' as const, content: 'Understood — I have the full session context including ticket history and the list of topics already covered.' },
         ...trimmed,
       ];
     }
+
+    // Even without structured slots, inject the covered-topics block so the LLM
+    // knows not to re-ask for information provided early in the conversation.
+    const coveredBlock = this.buildAnsweredQuestionsBlock(transcript);
+    if (coveredBlock) {
+      return [
+        { role: 'user' as const,      content: coveredBlock },
+        { role: 'assistant' as const, content: 'Understood — I will not re-ask for any information already provided.' },
+        ...trimmed,
+      ];
+    }
+
     return trimmed;
   }
 
