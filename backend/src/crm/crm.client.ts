@@ -123,7 +123,7 @@ export class CrmClient {
       found: true,
       customerId: customerDetail.customerID,
       customerName: customerDetail.customerName,
-      contactNumber: customerDetail.contactNumber || customerDetail.mobileNumber || customerDetail.mobile || '',
+      contactNumber: customerDetail.contactNumber,
       circle: customerDetail.circle,
       chargerCount: chargers.length,
       chargers,

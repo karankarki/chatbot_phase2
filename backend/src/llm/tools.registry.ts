@@ -253,18 +253,6 @@ export class ToolRegistry {
       input.recommended_engineer_action ? `Recommended action: ${input.recommended_engineer_action}` : '',
     ].filter(Boolean).join('. ');
 
-    // Ensure mobile is never empty — fall back to CRM asset lookup if needed
-    let mobileNumber = s.slots.mobile ?? '';
-    if (!mobileNumber && s.slots.chargerSerial) {
-      try {
-        const recheck = await this.crm.lookupBySerial(s.slots.chargerSerial);
-        if (recheck.found && recheck.contactNumber) {
-          mobileNumber = this.normalizeMobile(recheck.contactNumber);
-          this.sessions.updateSlots(sessionId, { mobile: mobileNumber });
-        }
-      } catch { /* proceed without — API will return its own error */ }
-    }
-
     const result = await this.crm.createTicket({
       description: descParts || 'Customer reported charger issue via SpinWise chat.',
       categoryLabel: (input.category_name as string) ?? 'General',
@@ -272,7 +260,7 @@ export class ToolRegistry {
       urgency,
       remarks: `Warranty: ${s.slots.warrantyStatus ?? 'Unknown'}. Consent: ${input.charges_consent ? 'Yes' : 'No'}.`,
       customerName: s.slots.customerName,
-      mobileNumber,
+      mobileNumber: s.slots.mobile ?? '',
       serialNumber: s.slots.chargerSerial,
       locationState: s.slots.circle,
       attachmentUrls: (input.photos_attachments as string[] | undefined) ?? s.slots.photos,

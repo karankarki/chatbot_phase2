@@ -5,7 +5,6 @@ import { LlmModule } from './llm/llm.module';
 import { CrmModule } from './crm/crm.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
 import { SessionModule } from './session/session.module';
-import { GeoModule } from './geo/geo.module';
 
 @Module({
   imports: [
@@ -15,7 +14,6 @@ import { GeoModule } from './geo/geo.module';
     CrmModule,
     LlmModule,
     ChatModule,
-    GeoModule,
   ],
 })
 export class AppModule {}
