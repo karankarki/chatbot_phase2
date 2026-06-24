@@ -65,6 +65,7 @@ export class ChatService implements OnModuleInit {
       chargerSerial: autoSerial,
       chargerModel: dto.prefillChargerModel,
       chargers,
+      chargerModels: dto.prefillChargerModels,
     });
 
     // Tell frontend what to show immediately alongside the greeting:
@@ -212,9 +213,18 @@ export class ChatService implements OnModuleInit {
     const userAskedAboutMcb = /\b(mcb|mccb)\b.*(what|how|where|look|find|show|appear|picture|image|identify|recogni[sz]e)|.*(what|how|where|look|find|show|appear|picture|image|don.?t know|no idea|never|identify|recogni[sz]e).*\b(mcb|mccb)\b/i.test(lastUserMsg);
     const showMcbImages = !closed && userAskedAboutMcb;
 
+    // Show LED pattern picker (Lottie buttons) for in-app users only when the bot asks about the LED.
+    const botAskingAboutLed = /\b(led|light)\b.*\b(colou?r|pattern|blink|flash)\b|\b(colou?r|pattern)\b.*\b(led|light)\b/i.test(lastBotMsg);
+    const currentSerial = s.slots.chargerSerial;
+    const ledChargerModel = currentSerial ? s.slots.chargerModels?.[currentSerial] : undefined;
+    const showLedPicker: 'old' | 'new' | null =
+      !closed && s.channel === 'in-app' && botAskingAboutLed && ledChargerModel
+        ? ledChargerModel
+        : null;
+
     const ticketId = s.slots.ticketId;
     const nocHandoffActive = !closed && !!s.slots.handoffRequested;
-    return { sessionId, closed, ticketId, chargerOptions, inputHint, showIssueTypes, showYesNo, showMcbImages, nocHandoffActive };
+    return { sessionId, closed, ticketId, chargerOptions, inputHint, showIssueTypes, showYesNo, showMcbImages, nocHandoffActive, showLedPicker };
   }
 
   // Called when the user explicitly chooses "Continue previous chat".

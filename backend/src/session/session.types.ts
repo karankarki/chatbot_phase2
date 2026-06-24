@@ -66,5 +66,7 @@ export interface ChatSession {
     closed?: boolean;
     /** Previous conversation messages waiting for user to choose Continue vs Start New. Not yet in transcript. */
     pendingHistory?: Array<{ role: string; content: string }>;
+    /** Map of serial → charger generation ('old' | 'new'), sent by Spin App URL params */
+    chargerModels?: Record<string, 'old' | 'new'>;
   };
 }

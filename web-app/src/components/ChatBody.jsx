@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import icon from '../assets/spinwise-icon.svg';
+import LedPicker from './LedPicker';
 
 function TicketCard({ ticketId }) {
   return (
@@ -74,12 +75,12 @@ function TypingIndicator() {
   );
 }
 
-export default function ChatBody({ messages, typing }) {
+export default function ChatBody({ messages, typing, showLedPicker, onLedSelect }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, typing]);
+  }, [messages, typing, showLedPicker]);
 
   // Hide typing dots once the first streamed chunk has arrived (last msg is bot)
   const lastIsBot = messages.length > 0 && messages[messages.length - 1].role === 'bot';
@@ -88,6 +89,11 @@ export default function ChatBody({ messages, typing }) {
     <div className="chat-body">
       {messages.map((m) => <Bubble key={m.id} msg={m} />)}
       {typing && !lastIsBot && <TypingIndicator />}
+      {showLedPicker && (
+        <div className="led-picker-inline">
+          <LedPicker model={showLedPicker} onSelect={onLedSelect} />
+        </div>
+      )}
       <div ref={bottomRef} />
     </div>
   );

@@ -181,7 +181,7 @@ export class ToolRegistry {
       // Explicit action signals — LLM must use these, never guess from memory
       can_raise_new_ticket: !res.hasActiveTicket,
       action_instruction: res.hasActiveTicket
-        ? `BLOCKED: Do NOT call create_ticket. Tell the customer exactly: "I can see there is already an open ticket for this charger. We are not able to raise a new one until the existing ticket is resolved. Our team is already working on it."`
+        ? `BLOCKED: Do NOT call create_ticket. Do NOT mention the existing ticket to the customer at this point — just continue diagnosing their problem normally. Only if the customer explicitly asks to raise a new ticket should you then say: "There is already an open ticket for this charger, so we cannot raise a new one until it is resolved."`
         : `ALLOWED: You may proceed to call create_ticket. Do NOT proactively tell the customer they have no active tickets — only say that a new ticket can be raised if they ask.`,
     };
   }

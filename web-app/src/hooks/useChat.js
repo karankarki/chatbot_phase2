@@ -3,17 +3,40 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 const API = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 /** Read Spin App prefill from URL query params.
- *  Flutter WebView loads: ?source=spin-app&name=Rahul&mobile=7983749823&serial=D126...
- *  Returns null for normal web users. */
+ *  Flutter WebView loads:
+ *    Single:   ?source=spin-app&name=Rahul&mobile=9876543210&D32410503220104=old
+ *    Multiple: ?source=spin-app&name=Rahul&mobile=9876543210&D32410503220104=old&T2025001111222A=new
+ *  The serial number IS the param key; value is 'old' | 'new' (charger hardware generation).
+ *  Legacy ?serial=... params are also supported for backward compatibility.
+ *  Returns null for normal web users (source !== 'spin-app'). */
 function getSpinAppPrefill() {
   const p = new URLSearchParams(window.location.search);
   if (p.get('source') !== 'spin-app') return null;
-  // Support ?serial=A&serial=B (multiple params) or ?serial=A,B (comma-separated)
-  const rawSerials = p.getAll('serial').flatMap((s) => s.split(',').map((x) => x.trim())).filter(Boolean);
+
+  const RESERVED_KEYS = new Set(['source', 'name', 'mobile', 'serial']);
+
+  // New format: ?D32410503220104=old&T2025001111222A=new
+  const chargerModels = {};
+  for (const [key, value] of p.entries()) {
+    if (!RESERVED_KEYS.has(key) && (value === 'old' || value === 'new')) {
+      chargerModels[key] = value;
+    }
+  }
+  const modelSerials = Object.keys(chargerModels);
+
+  // Legacy format: ?serial=D32410503220104&serial=T2025001111222A
+  const legacySerials = p.getAll('serial').flatMap((s) => s.split(',').map((x) => x.trim())).filter(Boolean);
+
+  // Merge: new-format serials take precedence; legacy fills in any gaps
+  const allSerials = modelSerials.length > 0
+    ? [...new Set([...modelSerials, ...legacySerials])]
+    : legacySerials;
+
   return {
-    name:    p.get('name')   || undefined,
-    mobile:  p.get('mobile') || undefined,
-    serials: rawSerials.length > 0 ? rawSerials : undefined,
+    name:          p.get('name')   || undefined,
+    mobile:        p.get('mobile') || undefined,
+    serials:       allSerials.length > 0 ? allSerials : undefined,
+    chargerModels: modelSerials.length > 0 ? chargerModels : undefined,
   };
 }
 
@@ -29,6 +52,7 @@ export function useChat() {
   const [showReview, setShowReview]         = useState(false);
   const [showYesNo, setShowYesNo]           = useState(false);
   const [showMcbImages, setShowMcbImages]   = useState(false);
+  const [showLedPicker, setShowLedPicker]   = useState(null); // null | 'old' | 'new'
   const [nocHandoffActive, setNocHandoffActive] = useState(false);
   const [hasPreviousChat, setHasPreviousChat]   = useState(false);
   const [showAppStore, setShowAppStore]         = useState(false);
@@ -148,6 +172,7 @@ export function useChat() {
     setShowReview(false);
     setShowYesNo(false);
     setShowMcbImages(false);
+    setShowLedPicker(null);
     setNocHandoffActive(false);
     setHasPreviousChat(false);
     setShowAppStore(false);
@@ -160,6 +185,7 @@ export function useChat() {
       ...(prefill?.mobile  && { prefillMobile: prefill.mobile }),
       ...(prefill?.serials?.length === 1 && { prefillChargerSerial: prefill.serials[0] }),
       ...(prefill?.serials?.length > 1   && { prefillChargerSerials: prefill.serials }),
+      ...(prefill?.chargerModels         && { prefillChargerModels: prefill.chargerModels }),
     };
 
     const res  = await fetch(`${API}/chat/session`, {
@@ -249,6 +275,7 @@ export function useChat() {
     setShowIssueTypes(false);
     setShowYesNo(false);
     setShowMcbImages(false);
+    setShowLedPicker(null);
 
     // Show user bubble — image previews rendered as thumbnails, no filename text
     const display = text || (attachments.length ? '' : '');
@@ -325,6 +352,7 @@ export function useChat() {
             setInputHint(data.inputHint ?? null);
             setShowYesNo(data.showYesNo ?? false);
             setShowMcbImages(data.showMcbImages ?? false);
+            setShowLedPicker(data.showLedPicker ?? null);
             setNocHandoffActive(data.nocHandoffActive ?? false);
             if (data.closed) {
               setClosed(true);
@@ -343,7 +371,7 @@ export function useChat() {
   return {
     messages, typing, closed,
     chargerOptions, showIssueTypes, inputHint, isSpinApp,
-    idleWarning, showReview, showYesNo, showMcbImages, nocHandoffActive,
+    idleWarning, showReview, showYesNo, showMcbImages, showLedPicker, nocHandoffActive,
     hasPreviousChat, showAppStore,
     startSession, sendMessage, stayActive, closeFromIdle, submitReview,
     resumeChat, startFresh, dismissAppStore,

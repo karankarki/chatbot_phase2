@@ -28,6 +28,9 @@ export class StartSessionDto {
   @IsString()
   @IsIn(['Spin Air', 'Tata/Compact'])
   prefillChargerModel?: 'Spin Air' | 'Tata/Compact';
+
+  @IsOptional()
+  prefillChargerModels?: Record<string, 'old' | 'new'>;
 }
 
 export interface Attachment {

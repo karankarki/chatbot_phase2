@@ -8,13 +8,14 @@ import QuickReplies from './components/QuickReplies';
 import IdleWarning from './components/IdleWarning';
 import ReviewPanel from './components/ReviewPanel';
 import AppStorePrompt from './components/AppStorePrompt';
+import LedPicker from './components/LedPicker';
 import { MCB_NORMAL, MCB_BURNT } from './assets/mcbImages.js';
 
 export default function App() {
   const {
     messages, typing, closed,
     chargerOptions, showIssueTypes, inputHint, isSpinApp,
-    idleWarning, showReview, showYesNo, showMcbImages,
+    idleWarning, showReview, showYesNo, showMcbImages, showLedPicker,
     hasPreviousChat, showAppStore,
     startSession, sendMessage, stayActive, closeFromIdle, submitReview,
     resumeChat, startFresh, dismissAppStore,
@@ -38,7 +39,12 @@ export default function App() {
   return (
     <div className="chat-window">
       <ChatHeader onRestart={startSession} />
-      <ChatBody messages={messages} typing={typing} />
+      <ChatBody
+        messages={messages}
+        typing={typing}
+        showLedPicker={!typing && !closed ? showLedPicker : null}
+        onLedSelect={sendMessage}
+      />
 
       {showQuickReplies && <QuickReplies onSelect={sendMessage} />}
       {showMcbImages && !typing && !closed && (

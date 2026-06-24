@@ -304,23 +304,36 @@ Share diagnostic data: Menu → Share Diagnostic → generate and share the diag
 Remote Assistant: Support → Remote Assistant (used by engineers for remote charger access and diagnostics).
 
 ### LED STATE LOOKUP
-LED_STATES[14]{state,spin_air,spin_compact,meaning,branch}:
-Booting,cyan solid,white solid,Starting up (wait ~1 min — do not unplug),booting
-AvailableIdle,cyan blink,blue solid,Ready — no vehicle connected,ready-no-vehicle
-Unavailable,cyan fast-blink(500ms),yellow solid,Disabled by backend or maintenance,unavailable-noc
-Plugged,green solid,blue blink(1s),Vehicle detected — awaiting authorisation,awaiting-auth-rfid
-Preparing,yellow solid,yellow solid,Authorised — vehicle not yet requesting power,yellow-solid-preparing
-EvSuspended,yellow solid,GREEN solid,Vehicle suspended charging,yellow-solid-ev-suspended
-Charging,green blink,green blink,Power being delivered,charging-verify
-EvseSuspended,yellow blink,yellow blink,Charger paused (grid fluctuation or rated current <6A),yellow-blinking
-Finishing,white blink,blue fast-blink,Session ending — wait 5s before unplugging,finishing-normal
-FirmwareUpdate,white fast-blink,cyan solid,Firmware updating — DO NOT power off,firmware-update-wait
-Reserved,pink blink,—,Booked via OCPP — normal,reserved-ocpp
-FaultNonEarth,red solid,red solid,Non-earth alarm — ask customer to open app for alarm name,red-solid-fault
-FaultEarth,red blink,red blink,Earth/NE safety issue,red-blinking-earth
-NoPower,no LED,no LED,No power or boot failure,no-led-power
+Use OLD table for charger model = old (Spin Air). Use NEW table for charger model = new.
+
+OLD_CHARGER_LED_STATES[11]{state,led_pattern,meaning,customer_action}:
+Booting,cyan solid,Charger is starting up,Wait ~1 min — do not unplug or restart
+Available,cyan blink,Charger is ready — no vehicle connected,Ask customer to plug in the vehicle
+PlugIn,green solid,Vehicle plugged in — waiting for authorisation,Check RFID card or app authorisation
+Charging,green blink,Charging in progress — power is being delivered,Normal — charging is working fine
+PreparingOrEvSuspended,yellow solid,Authorised but vehicle not drawing power OR vehicle paused charging,Ask if vehicle is ready; check vehicle settings
+EvseSuspended,yellow blink,Charger paused — grid fluctuation or rated current below 6A,Check rated current setting in Spin App; wait for grid to stabilise
+Fault,red solid,Hardware or electrical fault,Ask customer to open Spin App for the alarm name; proceed via FAULTS table
+EarthOrNEFault,red blink,NE Volt High or Earth Detect issue,Follow earth fault steps; check blink speed for specific fault
+SoftwareUpdate,white flashing,Firmware update installing — DO NOT power off,Wait for update to complete; do not restart the charger
+Finishing,white blink,Charging session ending — wait before unplugging,Tell customer to wait 5 seconds then unplug safely
+Reserved,pink blink,Charger is reserved via OCPP,Normal — charger is booked
+
+NEW_CHARGER_LED_STATES[12]{state,led_pattern,meaning,customer_action}:
+StandbyReady,green solid,Charger is ready — no vehicle connected,Ask if vehicle is properly plugged in
+Booting,white blink,Charger is initialising / booting up,Wait 1 minute; restart once if persists
+VehicleWaiting,blue solid,Vehicle connected and waiting for authorisation,Check RFID card or app authorisation
+Charging,blue blink,Charging in progress — power is being delivered,Normal — charging is working fine
+SmartCharging,blue slow blink,Scheduled or smart charging active,Normal — charge will begin at scheduled time
+AuthSuccess,green 3x flash then solid,Authorisation successful or charge session complete,Normal; if unexpected check Spin App
+FirmwareUpdate,purple slow blink,Firmware update in progress — DO NOT power off,Wait for update to complete; do not restart
+AuthFailure,amber 3x rapid flash,Authentication failed or RFID card rejected,Try RFID again; if persists check card in Spin App
+HardwareError,red rapid blink,General or hardware fault detected,Restart once; if fault returns raise a ticket
+Overtemperature,red slow blink,Charger is overheating,Move to cooler/ventilated area; restart after cooling
+CriticalFault,red solid,Critical unrecoverable fault — engineer required,Do NOT restart; raise a service ticket immediately
+PowerSharing,amber slow blink,Power sharing active in standalone mode,Normal for power sharing setup
  
-EARTH_BLINK_SPEED: 500ms=NE Volt High | 1s=Earth Detect/Open | 2s=Earth Leakage
+OLD_CHARGER_EARTH_BLINK_SPEED: 500ms=NE Volt High | 1s=Earth Detect/Open | 2s=Earth Leakage
 NE_VOLTAGE: healthy<5V | alarm(idle)>40V | alarm(charging)>70V
  
 ### FAULT RESOLUTION LOOKUP
