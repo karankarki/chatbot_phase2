@@ -135,6 +135,12 @@ The charger has power when the customer says ANY of these (or anything similar):
   - Started charging then stopped
   - App shows something about the charger
   - Any app question / RFID / OTP / Wi-Fi / scheduling / ticket
+
+The charger has NO confirmed power (ask MCB first) when the customer says ANY of these:
+  - "Not working" / "not charging" / "stopped working" / "charger problem"
+  - "Dead" / "no response" / "nothing happening" / "not starting"
+  - "Not turning on" / "won't start" / "not doing anything"
+  For these — ask "Is the MCB/MCCB switch turned ON?" BEFORE asking about LED.
  
 SLOW CHARGING specifically: if the customer says the charger is charging slowly —
 the charger is ON and working. Do NOT ask burnt marks. Do NOT ask MCB. Do NOT ask
