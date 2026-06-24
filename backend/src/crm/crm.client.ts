@@ -150,32 +150,46 @@ export class CrmClient {
       return this.parseTicketSummary(serial, data);
     } catch (e) {
       this.log.error(`getTicketSummary failed: ${(e as Error).message}`);
-      return { serial, totalTicketCount: 0, hasActiveTicket: false, recentTickets: [], serviceError: true };
+      return { serial, totalTicketCount: 0, hasActiveTicket: false, hasAnyActiveTicket: false, recentTickets: [], serviceError: true };
     }
   }
 
   private parseTicketSummary(serial: string, res: TicketSummaryResponse): TicketSummaryResult {
     if (res.status.code !== 2000 || !res.data || typeof res.data === 'string') {
-      return { serial, totalTicketCount: 0, hasActiveTicket: false, recentTickets: [] };
+      return { serial, totalTicketCount: 0, hasActiveTicket: false, hasAnyActiveTicket: false, recentTickets: [] };
     }
     const { totalCount, tickets } = res.data as { totalCount: number; tickets: CrmTicket[] };
-    const CLOSED_STATUSES = new Set(['closed', 'cancelled', 'resolved', 'welcome call completed']);
-    const CLOSED_STAGES   = new Set(['closure', 'cancelled', 'cancellation', 'resolved', 'resolution', 'welcome call completed']);
-    // Ticket is closed if ticketStatus is a closed value, OR if any timeline stage signals closure
+    // Log raw ticket data so we can see exactly what CRM returns
+    this.log.debug(
+      `getTicketSummary raw tickets: ${JSON.stringify(
+        tickets.map((t) => ({ ticketNo: t.ticketNo, callType: t.callType, ticketStatus: t.ticketStatus, stages: t.timeline.map((s) => s.stage) })),
+      )}`,
+    );
+    const CLOSED_STATUSES = new Set([
+      'closed', 'cancelled', 'resolved', 'welcome call completed',
+      'cancel request', 'cancellation request',
+    ]);
+    const CLOSED_STAGES = new Set([
+      'closure', 'cancelled', 'cancellation', 'resolved', 'resolution',
+      'welcome call completed', 'cancel request', 'cancellation request',
+    ]);
+    // Ticket is closed if ticketStatus is an explicit closed value, OR a timeline stage signals closure
     const isClosed = (t: CrmTicket) =>
-      !t.ticketStatus ||
       CLOSED_STATUSES.has(t.ticketStatus.toLowerCase()) ||
       t.timeline.some((e) => CLOSED_STAGES.has(e.stage.toLowerCase()));
     const isActive = (t: CrmTicket) => !isClosed(t);
-    // Only Complaint-type tickets block new ticket creation — Query/others are ignored
+    // Only Complaint-type tickets block new ticket creation — Query/others are ignored.
+    // Use includes() to handle CRM variations: "Complaint", "Service Complaint", etc.
     const activeComplaintTicket = tickets.find(
-      (t) => t.callType?.toLowerCase() === 'complaint' && isActive(t),
+      (t) => t.callType?.toLowerCase().includes('complaint') && isActive(t),
     );
+    const anyActiveTicket = tickets.some(isActive);
 
     return {
       serial,
       totalTicketCount: totalCount,
       hasActiveTicket: !!activeComplaintTicket,
+      hasAnyActiveTicket: anyActiveTicket,
       activeTicketNo: activeComplaintTicket?.ticketNo,
       activeTicketStatus: activeComplaintTicket?.ticketStatus,
       recentTickets: tickets.map((t) => ({

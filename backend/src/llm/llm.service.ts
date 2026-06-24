@@ -7,6 +7,7 @@ import { ToolRegistry } from './tools.registry';
 import { ChatMessage, ChatSession, SessionService } from '../session/session.service';
 import { Attachment } from '../chat/dto';
 import { CrmClient } from '../crm/crm.client';
+import { scanQrFromBase64, extractSerialFromQr } from './qr-scanner';
 
 type OAIMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 
@@ -101,7 +102,7 @@ export class LlmService implements OnModuleInit {
     if (attachments?.length) {
       const last = history[history.length - 1];
       if (last?.role === 'user') {
-        last.content = this.buildMultiModalContent(last.content as string, attachments);
+        last.content = await this.buildMultiModalContent(last.content as string, attachments);
       }
     }
 
@@ -287,18 +288,50 @@ export class LlmService implements OnModuleInit {
    * Build a multi-modal content array for a user message that includes file attachments.
    * Images → image_url blocks. PDFs / videos → text note.
    */
-  private buildMultiModalContent(
+  private async buildMultiModalContent(
     text: string,
     attachments: Attachment[],
-  ): OpenAI.Chat.Completions.ChatCompletionContentPart[] {
+  ): Promise<OpenAI.Chat.Completions.ChatCompletionContentPart[]> {
     const blocks: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [];
 
     for (const att of attachments) {
       if (att.type === 'image') {
-        blocks.push({
-          type: 'image_url',
-          image_url: { url: `data:${att.mediaType};base64,${att.data}` },
-        });
+        // Try QR scan first — if it succeeds, use that serial exclusively
+        const qrValue = await scanQrFromBase64(att.data);
+        if (qrValue) {
+          const serial = extractSerialFromQr(qrValue);
+          if (serial) {
+            // QR scan succeeded — inject serial and image (for safety scan only)
+            blocks.push({
+              type: 'text',
+              text: `[QR SCAN SUCCESS — Serial number: "${serial}". This is the confirmed serial for this session. DO NOT read or extract any serial from the sticker text in the image — the QR result is authoritative. DO NOT mention the "#" symbol or any prefix to the customer. Proceed using serial "${serial}" directly.]`,
+            });
+            blocks.push({
+              type: 'image_url',
+              image_url: { url: `data:${att.mediaType};base64,${att.data}` },
+            });
+          } else {
+            // QR decoded but serial extraction failed — let LLM read the sticker
+            blocks.push({
+              type: 'text',
+              text: `[QR code could not yield a valid serial. Please read the serial number from the sticker text in the image — extract only the characters after the "#" symbol.]`,
+            });
+            blocks.push({
+              type: 'image_url',
+              image_url: { url: `data:${att.mediaType};base64,${att.data}` },
+            });
+          }
+        } else {
+          // No QR detected — let LLM read the sticker text
+          blocks.push({
+            type: 'text',
+            text: `[No QR code detected in image. Please read the serial number from the sticker text — extract only the characters after the "#" symbol, ignoring everything before it.]`,
+          });
+          blocks.push({
+            type: 'image_url',
+            image_url: { url: `data:${att.mediaType};base64,${att.data}` },
+          });
+        }
       } else if (att.type === 'pdf') {
         blocks.push({
           type: 'text',

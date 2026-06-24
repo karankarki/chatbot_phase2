@@ -84,6 +84,16 @@ body {
 .bubble__time--user { color: rgba(255,255,255,0.75); }
 .bubble__time--bot  { color: #aaa; }
 
+.bubble__image-previews { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.bubble__image-thumb {
+  width: 160px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+  background: rgba(0,0,0,0.08);
+}
+
 .bubble__avatar {
   width: 32px; height: 32px;
   border-radius: 10px;

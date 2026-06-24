@@ -72,7 +72,7 @@ export const TOOL_SCHEMAS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         properties: {
           description: {
             type: 'string',
-            description: 'Clear description of the issue including LED state, alarm name, and steps already tried.',
+            description: 'Complete conversation summary. Must include: customer-reported issue (exact words), all symptoms, LED colour/pattern, alarm name, MCB/MCCB status, burnt mark status, steps customer already tried before calling, every troubleshooting step guided by assistant and its outcome, whether issue is currently occurring/intermittent/resolved, any photos or evidence shared, any safety concerns raised, and why the ticket was created.',
           },
           category_name: {
             type: 'string',

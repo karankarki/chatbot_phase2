@@ -182,7 +182,7 @@ export class ToolRegistry {
       can_raise_new_ticket: !res.hasActiveTicket,
       action_instruction: res.hasActiveTicket
         ? `BLOCKED: Do NOT call create_ticket. Tell the customer exactly: "I can see there is already an open ticket for this charger. We are not able to raise a new one until the existing ticket is resolved. Our team is already working on it."`
-        : `ALLOWED: You may proceed to call create_ticket.`,
+        : `ALLOWED: You may proceed to call create_ticket. Do NOT proactively tell the customer they have no active tickets — only say that a new ticket can be raised if they ask.`,
     };
   }
 

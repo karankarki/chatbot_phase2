@@ -136,6 +136,7 @@ export interface TicketSummaryResult {
   serial: string;
   totalTicketCount: number;
   hasActiveTicket: boolean;
+  hasAnyActiveTicket: boolean;
   activeTicketNo?: string;
   activeTicketStatus?: string;
   recentTickets: Array<{

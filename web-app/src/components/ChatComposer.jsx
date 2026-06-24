@@ -98,8 +98,9 @@ export default function ChatComposer({ onSend, disabled, inputHint }) {
   const submit = () => {
     const msg = text.trim();
     if (!msg && !files.length) return;
+    const previewUrls = files.map((f) => f.previewUrl ?? null);
     const attachments = files.map(({ previewUrl, ...rest }) => rest);
-    onSend(msg || '(attachment)', attachments);
+    onSend(msg, attachments, previewUrls);
     setText('');
     setFiles([]);
   };

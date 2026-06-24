@@ -32,16 +32,30 @@ function Bubble({ msg }) {
 
   const timeLabel = formatTime(msg.ts);
 
+  const lines = msg.text ? msg.text.split('\n') : [];
+  const previews = msg.imagePreviews ?? [];
+
   return (
     <div className={`bubble-row ${isUser ? 'bubble-row--user' : 'bubble-row--bot'}`}>
       {!isUser && <img src={icon} alt="" className="bubble__avatar" />}
       <div className={`bubble ${isUser ? 'bubble--user' : 'bubble--bot'}`}>
-        {msg.text.split('\n').map((line, i) => (
-          <span key={i}>
-            {line}
-            {i < msg.text.split('\n').length - 1 && <br />}
+        {lines.length > 0 && (
+          <span>
+            {lines.map((line, i) => (
+              <span key={i}>
+                {line}
+                {i < lines.length - 1 && <br />}
+              </span>
+            ))}
           </span>
-        ))}
+        )}
+        {previews.length > 0 && (
+          <div className="bubble__image-previews">
+            {previews.map((url, i) => (
+              <img key={i} src={url} alt="attachment" className="bubble__image-thumb" />
+            ))}
+          </div>
+        )}
         {msg.ticketId && <TicketCard ticketId={msg.ticketId} />}
         {timeLabel && <span className={`bubble__time ${isUser ? 'bubble__time--user' : 'bubble__time--bot'}`}>{timeLabel}</span>}
       </div>
