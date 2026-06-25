@@ -99,6 +99,17 @@ export class CrmClient {
   }
 
   private parseCustomerDetail(res: CustomerDetailResponse): CustomerLookup {
+    // 5xxx = CRM server-side error — treat as service unavailable, not "not found"
+    if (res.status.code >= 5000) {
+      this.log.error(`CRM server error ${res.status.code}: ${res.status.message}`);
+      return {
+        found: false,
+        chargers: [],
+        serviceError: true,
+        serviceErrorMessage:
+          'Our records system is temporarily unavailable. Please try again in a moment, or call our support line for immediate help.',
+      };
+    }
     if (res.status.code !== 2000 || !res.data || typeof res.data === 'string') {
       return { found: false, chargers: [] };
     }

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CrmClient } from '../crm/crm.client';
 import { SessionService } from '../session/session.service';
+import { getMobileRule } from '../common/mobile-rules';
 
 @Injectable()
 export class ToolRegistry {
@@ -29,14 +30,22 @@ export class ToolRegistry {
   // ─── Lookup customer ────────────────────────────────────────────────────────
 
   /**
-   * Strip country code prefixes (+91, 91, 0) and return the 10-digit number.
-   * Does NOT truncate arbitrary-length strings — if the result isn't 10 digits
-   * the caller must reject it.
+   * Strip country code / leading-zero prefix and return the local number digits.
+   * Uses the session's detected country to determine which dial code to strip.
    */
-  private normalizeMobile(raw: string): string {
+  private normalizeMobile(raw: string, country?: string): string {
     const digits = String(raw ?? '').replace(/\D+/g, '');
-    if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
-    if (digits.length === 11 && digits.startsWith('0'))  return digits.slice(1);
+    const rule = getMobileRule(country);
+    // Strip country dial code if present
+    if (rule.dialCode && digits.startsWith(rule.dialCode)) {
+      const local = digits.slice(rule.dialCode.length);
+      if (local.length >= rule.minLength && local.length <= rule.maxLength) return local;
+    }
+    // Strip leading 0 (common trunk prefix in many countries)
+    if (digits.startsWith('0')) {
+      const local = digits.slice(1);
+      if (local.length >= rule.minLength && local.length <= rule.maxLength) return local;
+    }
     return digits;
   }
 
@@ -65,9 +74,14 @@ export class ToolRegistry {
 
     // Validate mobile before hitting the CRM
     if (!serial) {
-      const mobile = this.normalizeMobile(rawIdentifier);
-      if (mobile.length !== 10) {
-        return { found: false, error: 'Invalid mobile number — please ask the customer to re-enter a valid 10-digit Indian mobile number.' };
+      const country = this.sessions.get(sessionId).slots.country;
+      const rule = getMobileRule(country);
+      const mobile = this.normalizeMobile(rawIdentifier, country);
+      const lengthDesc = rule.minLength === rule.maxLength
+        ? `${rule.minLength}-digit`
+        : `${rule.minLength}–${rule.maxLength}-digit`;
+      if (mobile.length < rule.minLength || mobile.length > rule.maxLength) {
+        return { found: false, error: `Invalid mobile number — please ask the customer to re-enter a valid ${lengthDesc} mobile number.` };
       }
     }
 
@@ -79,13 +93,14 @@ export class ToolRegistry {
       };
     }
 
+    const country = this.sessions.get(sessionId).slots.country;
     const res = serial
       ? await this.crm.lookupBySerial(serial)
-      : await this.crm.lookupByMobile(this.normalizeMobile(rawIdentifier));
+      : await this.crm.lookupByMobile(this.normalizeMobile(rawIdentifier, country));
 
     if (res.serviceError) {
       // Save mobile even on error so inputHint flips to 'serial' (bot will ask for serial next)
-      if (!serial) this.sessions.updateSlots(sessionId, { mobile: this.normalizeMobile(rawIdentifier) });
+      if (!serial) this.sessions.updateSlots(sessionId, { mobile: this.normalizeMobile(rawIdentifier, country) });
       return {
         found: false,
         serviceUnavailable: true,
@@ -95,7 +110,7 @@ export class ToolRegistry {
 
     if (!res.found) {
       // Save mobile so inputHint flips to 'serial' — bot will ask for serial number next
-      if (!serial) this.sessions.updateSlots(sessionId, { mobile: this.normalizeMobile(rawIdentifier) });
+      if (!serial) this.sessions.updateSlots(sessionId, { mobile: this.normalizeMobile(rawIdentifier, country) });
       return {
         found: false,
         message: serial
@@ -121,8 +136,8 @@ export class ToolRegistry {
       customerId: res.customerId,
       customerName,
       mobile: !serial
-        ? this.normalizeMobile(rawIdentifier)
-        : (res.contactNumber ? this.normalizeMobile(res.contactNumber) : undefined),
+        ? this.normalizeMobile(rawIdentifier, country)
+        : (res.contactNumber ? this.normalizeMobile(res.contactNumber, country) : undefined),
       circle: res.circle,
       chargers: res.chargers,
       chargerSerial: res.autoSelectedSerial,

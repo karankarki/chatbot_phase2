@@ -1,6 +1,37 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import jsQR from 'jsqr';
 import AttachmentPreviews from './AttachmentPreviews';
+
+const COUNTRIES = [
+  { code: 'IN', flag: '🇮🇳', name: 'India',        dial: '+91',  min: 10, max: 10 },
+  { code: 'AE', flag: '🇦🇪', name: 'UAE',           dial: '+971', min:  9, max:  9 },
+  { code: 'SA', flag: '🇸🇦', name: 'Saudi Arabia',  dial: '+966', min:  9, max:  9 },
+  { code: 'QA', flag: '🇶🇦', name: 'Qatar',         dial: '+974', min:  8, max:  8 },
+  { code: 'KW', flag: '🇰🇼', name: 'Kuwait',        dial: '+965', min:  8, max:  8 },
+  { code: 'BH', flag: '🇧🇭', name: 'Bahrain',       dial: '+973', min:  8, max:  8 },
+  { code: 'OM', flag: '🇴🇲', name: 'Oman',          dial: '+968', min:  8, max:  8 },
+  { code: 'GB', flag: '🇬🇧', name: 'UK',            dial: '+44',  min: 10, max: 10 },
+  { code: 'US', flag: '🇺🇸', name: 'USA',           dial: '+1',   min: 10, max: 10 },
+  { code: 'CA', flag: '🇨🇦', name: 'Canada',        dial: '+1',   min: 10, max: 10 },
+  { code: 'AU', flag: '🇦🇺', name: 'Australia',     dial: '+61',  min:  9, max:  9 },
+  { code: 'SG', flag: '🇸🇬', name: 'Singapore',     dial: '+65',  min:  8, max:  8 },
+  { code: 'MY', flag: '🇲🇾', name: 'Malaysia',      dial: '+60',  min:  9, max: 10 },
+  { code: 'ID', flag: '🇮🇩', name: 'Indonesia',     dial: '+62',  min:  9, max: 12 },
+  { code: 'PH', flag: '🇵🇭', name: 'Philippines',   dial: '+63',  min: 10, max: 10 },
+  { code: 'TH', flag: '🇹🇭', name: 'Thailand',      dial: '+66',  min:  9, max:  9 },
+  { code: 'DE', flag: '🇩🇪', name: 'Germany',       dial: '+49',  min: 10, max: 11 },
+  { code: 'FR', flag: '🇫🇷', name: 'France',        dial: '+33',  min:  9, max:  9 },
+  { code: 'PK', flag: '🇵🇰', name: 'Pakistan',      dial: '+92',  min: 10, max: 10 },
+  { code: 'BD', flag: '🇧🇩', name: 'Bangladesh',    dial: '+880', min: 10, max: 10 },
+  { code: 'LK', flag: '🇱🇰', name: 'Sri Lanka',     dial: '+94',  min:  9, max:  9 },
+  { code: 'NP', flag: '🇳🇵', name: 'Nepal',         dial: '+977', min: 10, max: 10 },
+  { code: 'ZA', flag: '🇿🇦', name: 'South Africa',  dial: '+27',  min:  9, max:  9 },
+  { code: 'NG', flag: '🇳🇬', name: 'Nigeria',       dial: '+234', min: 10, max: 10 },
+];
+
+function getCountry(code) {
+  return COUNTRIES.find(c => c.code === code) ?? COUNTRIES[0];
+}
 
 const HEIC_TYPES = new Set(['image/heic', 'image/heif']);
 const MAX_MB = 10;
@@ -57,10 +88,23 @@ function scanQRCode(file) {
   });
 }
 
-export default function ChatComposer({ onSend, disabled, inputHint }) {
+export default function ChatComposer({ onSend, disabled, inputHint, detectedCountry, onCountryChange }) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);   // { type, mediaType, data, name, previewUrl }
   const fileRef = useRef(null);
+  const [selectedCountry, setSelectedCountry] = useState(() => getCountry(detectedCountry));
+
+  // Sync when IP-detected country arrives after session start
+  useEffect(() => {
+    if (detectedCountry) setSelectedCountry(getCountry(detectedCountry));
+  }, [detectedCountry]);
+
+  const handleCountryChange = (e) => {
+    const c = getCountry(e.target.value);
+    setSelectedCountry(c);
+    setText('');
+    onCountryChange?.(c.code);
+  };
 
   const handleFiles = async (fileList) => {
     const added = [];
@@ -109,6 +153,52 @@ export default function ChatComposer({ onSend, disabled, inputHint }) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
   };
 
+  if (inputHint === 'mobile') {
+    const full = text.length === selectedCountry.max;
+    const valid = text.length >= selectedCountry.min && text.length <= selectedCountry.max;
+    const lenLabel = selectedCountry.min === selectedCountry.max
+      ? `${selectedCountry.max} digits`
+      : `${selectedCountry.min}–${selectedCountry.max} digits`;
+    return (
+      <div className="composer">
+        <div className="composer__row">
+          <select
+            className="phone-country-select"
+            value={selectedCountry.code}
+            onChange={handleCountryChange}
+            disabled={disabled}
+          >
+            {COUNTRIES.map(c => (
+              <option key={c.code} value={c.code}>
+                {c.flag} {c.dial}
+              </option>
+            ))}
+          </select>
+          <input
+            className="phone-number-input"
+            type="tel"
+            inputMode="numeric"
+            placeholder={lenLabel}
+            value={text}
+            onChange={(e) => {
+              const val = e.target.value.replace(/\D/g, '').slice(0, selectedCountry.max);
+              setText(val);
+            }}
+            onKeyDown={handleKey}
+            disabled={disabled}
+          />
+          <button
+            className="composer__send"
+            onClick={submit}
+            disabled={disabled || !valid}
+          >
+            ➤
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="composer">
       <AttachmentPreviews files={files} onRemove={removeFile} />
@@ -134,30 +224,20 @@ export default function ChatComposer({ onSend, disabled, inputHint }) {
             className="composer__input"
             rows={1}
             placeholder={
-              inputHint === 'mobile' ? 'Enter 10-digit mobile number'
-              : inputHint === 'serial' ? 'Enter charger serial number'
+              inputHint === 'serial' ? 'Enter charger serial number'
               : 'Type a message…'
             }
             value={text}
             onChange={(e) => {
               let val = e.target.value;
-              if (inputHint === 'mobile') val = val.replace(/\D/g, '').slice(0, 10);
               if (inputHint === 'serial') {
-                // Uppercase only when input looks like a charger serial (alphanumeric, no spaces)
-                // If the user types a sentence/message, keep it lowercase so it reads naturally
                 val = /^[A-Z0-9]*$/i.test(val) ? val.toUpperCase() : val.toLowerCase();
               }
               setText(val);
             }}
             onKeyDown={handleKey}
             disabled={disabled}
-            inputMode={inputHint === 'mobile' ? 'numeric' : 'text'}
           />
-          {inputHint === 'mobile' && (
-            <span className={`composer__counter${text.length === 10 ? ' composer__counter--full' : ''}`}>
-              {text.length}/10
-            </span>
-          )}
         </div>
         <button
           className="composer__send"

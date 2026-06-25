@@ -16,9 +16,9 @@ export default function App() {
     messages, typing, closed,
     chargerOptions, showIssueTypes, inputHint, isSpinApp,
     idleWarning, showReview, showYesNo, showMcbImages, showLedPicker,
-    hasPreviousChat, showAppStore,
+    hasPreviousChat, showAppStore, detectedCountry,
     startSession, sendMessage, stayActive, closeFromIdle, submitReview,
-    resumeChat, startFresh, dismissAppStore,
+    resumeChat, startFresh, dismissAppStore, updateCountry,
   } = useChat();
 
   useEffect(() => { startSession(); }, []);
@@ -91,7 +91,7 @@ export default function App() {
           <button onClick={startSession}>Start a new chat</button>
         </div>
       ) : (
-        <ChatComposer onSend={sendMessage} disabled={typing || closed || showQuickReplies || hasPreviousChat} inputHint={inputHint} />
+        <ChatComposer onSend={sendMessage} disabled={typing || closed || showQuickReplies || hasPreviousChat} inputHint={inputHint} detectedCountry={detectedCountry} onCountryChange={updateCountry} />
       )}
 
       {/* Idle warning overlay — sits above the composer */}

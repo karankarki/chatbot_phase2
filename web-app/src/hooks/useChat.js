@@ -55,6 +55,7 @@ export function useChat() {
   const [showLedPicker, setShowLedPicker]   = useState(null); // null | 'old' | 'new'
   const [hasPreviousChat, setHasPreviousChat]   = useState(false);
   const [showAppStore, setShowAppStore]         = useState(false);
+  const [detectedCountry, setDetectedCountry]   = useState(null);
 
   const sessionId    = useRef(null);
   const idSeq        = useRef(0);
@@ -180,6 +181,7 @@ export function useChat() {
     });
     const data = await res.json();
     sessionId.current = data.sessionId;
+    if (data.country) setDetectedCountry(data.country);
 
     // If an open previous conversation exists, ask user whether to continue or start fresh.
     if (data.hasPreviousChat) {
@@ -352,12 +354,22 @@ export function useChat() {
     }
   }, [closed]);
 
+  const updateCountry = useCallback(async (countryCode) => {
+    if (!sessionId.current) return;
+    setDetectedCountry(countryCode);
+    await fetch(`${API}/chat/session/${sessionId.current}/country`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ country: countryCode }),
+    }).catch(() => {});
+  }, []);
+
   return {
     messages, typing, closed,
     chargerOptions, showIssueTypes, inputHint, isSpinApp,
     idleWarning, showReview, showYesNo, showMcbImages, showLedPicker,
-    hasPreviousChat, showAppStore,
+    hasPreviousChat, showAppStore, detectedCountry,
     startSession, sendMessage, stayActive, closeFromIdle, submitReview,
-    resumeChat, startFresh, dismissAppStore,
+    resumeChat, startFresh, dismissAppStore, updateCountry,
   };
 }

@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import * as geoip from 'geoip-lite';
 import { SessionService } from '../session/session.service';
 import { LlmService } from '../llm/llm.service';
 import { CrmClient } from '../crm/crm.client';
@@ -43,7 +44,7 @@ export class ChatService implements OnModuleInit {
     }, 60_000).unref();
   }
 
-  async start(dto: StartSessionDto) {
+  async start(dto: StartSessionDto, clientIp?: string) {
     // Build charger slots from the mobile app's prefilled serial list.
     // If only one serial, auto-select it. If multiple, store the list so the
     // charger picker UI fires on the first message exchange.
@@ -59,7 +60,10 @@ export class ChatService implements OnModuleInit {
       : undefined;
     const autoSerial = serials.length === 1 ? serials[0] : dto.prefillChargerSerial;
 
+    const country = clientIp ? (geoip.lookup(clientIp)?.country ?? undefined) : undefined;
+
     const session = this.sessions.create(dto.channel, {
+      country,
       customerName: dto.prefillName,
       mobile: dto.prefillMobile,
       chargerSerial: autoSerial,
@@ -88,7 +92,11 @@ export class ChatService implements OnModuleInit {
       }
     }
 
-    return { sessionId: session.id, channel: session.channel, chargerOptions, showIssueTypes, hasPreviousChat };
+    return { sessionId: session.id, channel: session.channel, chargerOptions, showIssueTypes, hasPreviousChat, country: country ?? null };
+  }
+
+  updateCountry(sessionId: string, country: string) {
+    this.sessions.updateSlots(sessionId, { country: country.toUpperCase() });
   }
 
   async sendStream(

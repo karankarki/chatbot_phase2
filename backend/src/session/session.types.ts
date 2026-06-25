@@ -24,6 +24,8 @@ export interface ChatSession {
   lastActivityAt: number;
   transcript: ChatMessage[];
   slots: {
+    /** ISO 3166-1 alpha-2 country code detected from client IP (e.g. "IN", "AE") */
+    country?: string;
     customerName?: string;
     mobile?: string;
     customerId?: string;

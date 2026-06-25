@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
-import { Response } from 'express';
+import { Body, Controller, Get, Param, Post, Req, Res } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { ChatService } from './chat.service';
 import { SendMessageDto, StartSessionDto } from './dto';
 
@@ -8,8 +8,10 @@ export class ChatController {
   constructor(private readonly chat: ChatService) {}
 
   @Post('session')
-  start(@Body() dto: StartSessionDto) {
-    return this.chat.start(dto);
+  start(@Body() dto: StartSessionDto, @Req() req: Request) {
+    const forwarded = req.headers['x-forwarded-for'];
+    const ip = (Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0])?.trim() || req.ip || '';
+    return this.chat.start(dto, ip);
   }
 
   @Post('session/:id/message')
@@ -43,6 +45,12 @@ export class ChatController {
   @Post('session/:id/resume')
   resume(@Param('id') id: string) {
     return this.chat.resumeSession(id);
+  }
+
+  @Post('session/:id/country')
+  updateCountry(@Param('id') id: string, @Body() body: { country: string }) {
+    this.chat.updateCountry(id, body.country);
+    return { ok: true };
   }
 
   @Post('session/:id/rating')
