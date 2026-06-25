@@ -109,10 +109,12 @@ export class ChatService implements OnModuleInit {
 
     // If the charger picker is active and user sent a numeric index, resolve it to a serial
     // directly so the LLM receives charger_confirmed in SESSION_STATE instead of raw "2".
+    let pickedSerial: string | undefined;
     if (!hadChargerBefore && hadMultipleChargers) {
       const idx = parseInt(message.trim(), 10);
       if (!isNaN(idx) && idx >= 1 && idx <= sBefore.slots.chargers!.length) {
         const picked = sBefore.slots.chargers![idx - 1];
+        pickedSerial = picked.serial;
         this.sessions.updateSlots(sessionId, {
           chargerSerial: picked.serial,
           chargerDescription: picked.description !== picked.serial ? picked.description : undefined,
@@ -150,6 +152,16 @@ export class ChatService implements OnModuleInit {
             this.log.log(`[${sessionId}] resumed conversation after multi-charger selection (${picked.serial})`);
           }
         }
+      }
+    }
+
+    // Replace the raw picker index (e.g. "2") in the transcript with a semantic message so
+    // the LLM never sees a bare number as a user utterance and gets confused about what "7" means.
+    if (pickedSerial) {
+      const s = this.sessions.get(sessionId);
+      const lastMsg = s.transcript[s.transcript.length - 1];
+      if (lastMsg?.role === 'user') {
+        lastMsg.content = `[User selected charger ${pickedSerial} from the charger list]`;
       }
     }
 
