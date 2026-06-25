@@ -176,7 +176,7 @@ export class ChatService implements OnModuleInit {
     // Re-surface issue type buttons after charger selection only for in-app (Spin App) channel.
     // Web users already selected their issue type before the charger lookup, so don't show again.
     const showIssueTypes = !hadChargerBefore && !!s.slots.chargerSerial && hadMultipleChargers
-      && s.channel === 'in-app';
+      && s.channel === 'in-app' && !s.slots.restored;
 
     // Tell the frontend which input mode to enforce next.
     const lastBotMsg = [...s.transcript].reverse().find((m) => m.role === 'assistant')?.content ?? '';

@@ -32,7 +32,7 @@ export default function App() {
     !closed &&
     !hasPreviousChat &&
     (
-      (messages.length === 1 && messages[0]?.role === 'bot' && !(isSpinApp && spinAppHasSerial)) ||
+      (messages.length === 1 && messages[0]?.role === 'bot' && !(isSpinApp && spinAppHasSerial) && chargerOptions.length === 0) ||
       showIssueTypes
     );
 
