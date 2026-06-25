@@ -236,8 +236,9 @@ export class ChatService implements OnModuleInit {
     const userAskedAboutMcb = /\b(mcb|mccb)\b.*(what|how|where|look|find|show|appear|picture|image|identify|recogni[sz]e)|.*(what|how|where|look|find|show|appear|picture|image|don.?t know|no idea|never|identify|recogni[sz]e).*\b(mcb|mccb)\b/i.test(lastUserMsg);
     const showMcbImages = !closed && userAskedAboutMcb;
 
-    // Show LED pattern picker (Lottie buttons) for in-app users only when the bot asks about the LED.
-    const botAskingAboutLed = /\b(led|light)\b.*\b(colou?r|pattern|blink|flash)\b|\b(colou?r|pattern)\b.*\b(led|light)\b/i.test(lastBotMsg);
+    // Show LED pattern picker only when the bot is explicitly asking the customer to describe their LED.
+    // Must be a question — not a statement describing a fault or explaining LED behaviour.
+    const botAskingAboutLed = /what colou?r is the (led|light)|colou?r.*\b(led|light)\b.*pattern|(led|light).*colou?r.*(solid|blink)|is (it|the led|the light) solid or blink/i.test(lastBotMsg);
     const currentSerial = s.slots.chargerSerial;
     const ledChargerModel = currentSerial ? s.slots.chargerModels?.[currentSerial] : undefined;
     const showLedPicker: 'old' | 'new' | null =

@@ -465,7 +465,7 @@ export class LlmService implements OnModuleInit {
             .join(' | ');
           return `  ${t.ticketNo} [${t.status}] ${t.category}/${t.subCategory} raised:${t.ticketDate} timeline: ${tl}`;
         });
-        ticketBlock = `\n[TICKET_HISTORY:\n${lines.join('\n')}\n]`;
+        ticketBlock = `\n[TICKET_HISTORY — SEALED: This data is for internal reference only. Do NOT mention, summarise, or reveal any of this ticket information to the customer unless they explicitly ask for complaint status OR you are at Stage 5 about to call create_ticket. Revealing ticket history at any other point is a hard violation.\n${lines.join('\n')}\n]`;
       }
 
       const coveredBlock = this.buildAnsweredQuestionsBlock(transcript);
