@@ -57,10 +57,12 @@ export function useChat() {
   const [showAppStore, setShowAppStore]         = useState(false);
   const [detectedCountry, setDetectedCountry]   = useState(null);
 
-  const sessionId    = useRef(null);
-  const idSeq        = useRef(0);
-  const lastActivity = useRef(Date.now());
-  const idleActive   = useRef(false);
+  const sessionId           = useRef(null);
+  const idSeq               = useRef(0);
+  const lastActivity        = useRef(Date.now());
+  const idleActive          = useRef(false);
+  // Track where hasPreviousChat was triggered from so startFresh handles both cases correctly
+  const previousChatSource  = useRef('session'); // 'session' | 'charger-select'
 
   const nextId = () => ++idSeq.current;
 
@@ -214,6 +216,7 @@ export function useChat() {
 
   // User chose "Continue previous chat" — silently restore history then open composer.
   const resumeChat = useCallback(async () => {
+    previousChatSource.current = 'session';
     setHasPreviousChat(false);
     setShowIssueTypes(false);
     try {
@@ -239,12 +242,20 @@ export function useChat() {
 
   // User chose "Start new" — show fresh greeting + issue type buttons.
   const startFresh = useCallback(() => {
+    const fromChargerSelect = previousChatSource.current === 'charger-select';
+    previousChatSource.current = 'session';
+    setHasPreviousChat(false);
+    if (fromChargerSelect) {
+      // Charger already confirmed — just surface the issue type buttons without wiping the chat
+      setShowIssueTypes(true);
+      return;
+    }
+    // Single-charger scenario: replace with fresh greeting + issue type buttons
     const prefill = getSpinAppPrefill();
     const name = prefill?.name;
     const greeting = name
       ? `Hello ${name}! I'm SpinWise, Exicom's virtual assistant.\n\nPlease select the issue you're facing:`
       : "Hello! Welcome to Exicom Customer Care.\n\nI'm SpinWise, Exicom's virtual assistant, here to help you get charging again quickly.\n\nPlease select the issue you're facing:";
-    setHasPreviousChat(false);
     setMessages([{ id: nextId(), role: 'bot', text: greeting, ts: Date.now() }]);
     setShowIssueTypes(true);
   }, []);
@@ -340,6 +351,10 @@ export function useChat() {
             setShowYesNo(data.showYesNo ?? false);
             setShowMcbImages(data.showMcbImages ?? false);
             setShowLedPicker(data.showLedPicker ?? null);
+            if (data.hasPreviousChat) {
+              setHasPreviousChat(true);
+              previousChatSource.current = 'charger-select';
+            }
             if (data.closed) {
               setClosed(true);
               setTimeout(() => setShowReview(true), 400);

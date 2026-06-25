@@ -131,36 +131,30 @@ export class ChatService implements OnModuleInit {
         });
 
         // For Spin App (in-app) only: check if an open conversation exists for this mobile+serial.
-        // If found, restore historical messages before the current message so the LLM resumes
-        // naturally. Web-widget never restores — always starts fresh.
+        // If found, store as pendingHistory so the user can choose Continue or Start New.
+        // Web-widget never has previous chat — always starts fresh.
         if (sBefore.channel === 'in-app' && sBefore.slots.mobile) {
-          // Fetch chat history and ticket summary in parallel — both are needed if history exists.
           const [history, ticketInfo] = await Promise.all([
             this.crm.fetchChatHistory(sBefore.slots.mobile, picked.serial),
             this.crm.getTicketSummary(picked.serial),
           ]);
           if (history.found && !history.isClosed && history.messages?.length) {
-            // Insert historical messages before the current user message in the transcript
-            const s = this.sessions.get(sessionId);
-            const currentMsg = s.transcript.pop()!; // temporarily remove the just-appended user msg
-            for (const m of history.messages) {
-              s.transcript.push({
-                role: m.role === 'assistant' ? 'assistant' : 'user',
-                content: m.content,
-                ts: 0,
-              });
-            }
-            s.transcript.push(currentMsg); // re-append current message at the end
-
-            // Pre-populate ticket info so the LLM gets the "RESUMED" directive immediately
+            // Store as pendingHistory — user will choose Continue or Start New (not silent restore)
             this.sessions.updateSlots(sessionId, {
               hasActiveTicket: ticketInfo.hasActiveTicket,
               activeTicketNo: ticketInfo.activeTicketNo,
               activeTicketStatus: ticketInfo.activeTicketStatus,
               recentTickets: ticketInfo.recentTickets,
-              restored: true,
+              pendingHistory: history.messages,
             });
-            this.log.log(`[${sessionId}] resumed conversation after multi-charger selection (${picked.serial})`);
+            this.log.log(`[${sessionId}] found pending history after multi-charger selection (${picked.serial}) — prompting user`);
+          } else {
+            this.sessions.updateSlots(sessionId, {
+              hasActiveTicket: ticketInfo.hasActiveTicket,
+              activeTicketNo: ticketInfo.activeTicketNo,
+              activeTicketStatus: ticketInfo.activeTicketStatus,
+              recentTickets: ticketInfo.recentTickets,
+            });
           }
         }
       }
@@ -176,7 +170,21 @@ export class ChatService implements OnModuleInit {
       }
     }
 
-    const { closed } = await this.llm.respondStream(sessionId, onChunk, attachments);
+    // If pending history was found right after charger selection, skip the LLM and ask
+    // the user to choose Continue or Start New instead of greeting fresh.
+    const sForPick = this.sessions.get(sessionId);
+    const pendingHistoryAfterPick = !hadChargerBefore && hadMultipleChargers
+      && sBefore.channel === 'in-app'
+      && !!sForPick.slots.pendingHistory?.length;
+
+    let closed = false;
+    if (pendingHistoryAfterPick) {
+      const cannedReply = 'I found an unfinished conversation for this charger. Would you like to continue where you left off, or start a fresh conversation?';
+      onChunk(cannedReply);
+      this.sessions.append(sessionId, { role: 'assistant', content: cannedReply });
+    } else {
+      ({ closed } = await this.llm.respondStream(sessionId, onChunk, attachments));
+    }
 
     // Persist conversation to CRM after every turn so it can be resumed if the user abandons.
     // Pass closed=true only on graceful end so fetch can tell resumable from completed.
@@ -197,9 +205,10 @@ export class ChatService implements OnModuleInit {
         : undefined;
 
     // Re-surface issue type buttons after charger selection only for in-app (Spin App) channel.
-    // Web users already selected their issue type before the charger lookup, so don't show again.
+    // Don't show if user needs to choose Continue vs Start New first.
+    const hasPreviousChat = pendingHistoryAfterPick;
     const showIssueTypes = !hadChargerBefore && !!s.slots.chargerSerial && hadMultipleChargers
-      && s.channel === 'in-app' && !s.slots.restored;
+      && s.channel === 'in-app' && !s.slots.restored && !hasPreviousChat;
 
     // Tell the frontend which input mode to enforce next.
     const lastBotMsg = [...s.transcript].reverse().find((m) => m.role === 'assistant')?.content ?? '';
@@ -247,7 +256,7 @@ export class ChatService implements OnModuleInit {
         : null;
 
     const ticketId = s.slots.ticketId;
-    return { sessionId, closed, ticketId, chargerOptions, inputHint, showIssueTypes, showYesNo, showMcbImages, showLedPicker };
+    return { sessionId, closed, ticketId, chargerOptions, inputHint, showIssueTypes, showYesNo, showMcbImages, showLedPicker, hasPreviousChat };
   }
 
   // Called when the user explicitly chooses "Continue previous chat".
@@ -272,6 +281,7 @@ export class ChatService implements OnModuleInit {
         activeTicketStatus: ticketInfo.activeTicketStatus,
         recentTickets: ticketInfo.recentTickets,
         restored: true,
+        pendingHistory: [],
       });
     }
 

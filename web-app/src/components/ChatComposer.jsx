@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import jsQR from 'jsqr';
 import AttachmentPreviews from './AttachmentPreviews';
 
@@ -37,10 +37,13 @@ const HEIC_TYPES = new Set(['image/heic', 'image/heif']);
 const MAX_MB = 10;
 
 function classifyFile(file) {
-  if (HEIC_TYPES.has(file.type.toLowerCase())) return 'heic';
-  if (file.type.startsWith('image/')) return 'image';
-  if (file.type === 'application/pdf') return 'pdf';
-  if (file.type.startsWith('video/')) return 'video';
+  const mimeType = file.type.toLowerCase();
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+  // Fall back to extension when the browser/WebView omits the MIME type (common on Android WebViews)
+  if (HEIC_TYPES.has(mimeType) || (!mimeType && (ext === 'heic' || ext === 'heif'))) return 'heic';
+  if (mimeType.startsWith('image/') || (!mimeType && ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext))) return 'image';
+  if (mimeType === 'application/pdf' || (!mimeType && ext === 'pdf')) return 'pdf';
+  if (mimeType.startsWith('video/') || (!mimeType && ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext))) return 'video';
   return null;
 }
 
@@ -91,7 +94,6 @@ function scanQRCode(file) {
 export default function ChatComposer({ onSend, disabled, inputHint, detectedCountry, onCountryChange }) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);   // { type, mediaType, data, name, previewUrl }
-  const fileRef = useRef(null);
   const [selectedCountry, setSelectedCountry] = useState(() => getCountry(detectedCountry));
 
   // Sync when IP-detected country arrives after session start
@@ -203,22 +205,22 @@ export default function ChatComposer({ onSend, disabled, inputHint, detectedCoun
     <div className="composer">
       <AttachmentPreviews files={files} onRemove={removeFile} />
       <div className="composer__row">
-        <button
+        {/* label wrapper is the most reliable trigger for file inputs on iOS/Android WebViews */}
+        <label
           className="composer__attach"
-          onClick={() => fileRef.current?.click()}
           title="Attach file"
-          disabled={disabled}
+          style={{ cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1, pointerEvents: disabled ? 'none' : 'auto' }}
         >
           📎
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*,application/pdf,video/*"
-          multiple
-          style={{ display: 'none' }}
-          onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }}
-        />
+          <input
+            type="file"
+            accept="image/*,application/pdf,video/*"
+            multiple
+            style={{ display: 'none' }}
+            disabled={disabled}
+            onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }}
+          />
+        </label>
         <div className="composer__input-wrap">
           <textarea
             className="composer__input"
