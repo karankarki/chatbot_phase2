@@ -283,6 +283,8 @@ export class ChatService implements OnModuleInit {
         restored: true,
         pendingHistory: [],
       });
+    } else {
+      this.sessions.updateSlots(sessionId, { restored: true, pendingHistory: [] });
     }
 
     this.log.log(`[${sessionId}] user chose Continue — restored ${pending.length} msgs`);

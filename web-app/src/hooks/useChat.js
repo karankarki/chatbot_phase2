@@ -214,16 +214,16 @@ export function useChat() {
     if (data.showIssueTypes) setShowIssueTypes(true);
   }, []);
 
-  // User chose "Continue previous chat" — silently restore history then open composer.
+  // User chose "Continue previous chat" — restore history then open composer.
   const resumeChat = useCallback(async () => {
     previousChatSource.current = 'session';
     setHasPreviousChat(false);
     setShowIssueTypes(false);
+    const now = Date.now();
     try {
       const res = await fetch(`${API}/chat/session/${sessionId.current}/resume`, { method: 'POST' });
       const data = await res.json();
       if (data.messages?.length > 0) {
-        const now = Date.now();
         const restored = data.messages.map((m, i) => ({
           id: nextId(),
           role: m.role,
@@ -234,9 +234,13 @@ export function useChat() {
           ...restored,
           { id: nextId(), role: 'bot', text: 'Welcome back! Continuing from where you left off.', ts: now },
         ]);
+      } else {
+        // History was cleared — show a fresh welcome so the old greeting doesn't linger
+        setMessages([{ id: nextId(), role: 'bot', text: 'Welcome back! How can I help you today?', ts: now }]);
       }
     } catch {
-      // If restore fails, just clear the flag and let the user chat fresh
+      // Session lost (e.g. server restart) — open a fresh chat
+      setMessages([{ id: nextId(), role: 'bot', text: 'Welcome back! How can I help you today?', ts: now }]);
     }
   }, []);
 

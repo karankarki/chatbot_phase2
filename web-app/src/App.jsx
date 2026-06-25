@@ -26,7 +26,16 @@ export default function App() {
   // Show initial category quick replies on the very first bot message, before user replies.
   // For Spin App users whose serial is already known, skip quick replies — the LLM will
   // jump straight to asking what the issue is with that specific charger.
-  const spinAppHasSerial = new URLSearchParams(window.location.search).getAll('serial').some(Boolean);
+  // Check both legacy (?serial=...) and new key-based (?D324...=old) serial formats
+  const spinAppHasSerial = (() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.getAll('serial').some(Boolean)) return true;
+    const RESERVED = new Set(['source', 'name', 'mobile', 'serial']);
+    for (const [k, v] of p.entries()) {
+      if (!RESERVED.has(k) && (v === 'old' || v === 'new')) return true;
+    }
+    return false;
+  })();
   const showQuickReplies =
     !typing &&
     !closed &&

@@ -103,7 +103,9 @@ export class LlmService implements OnModuleInit {
     if (attachments?.length) {
       const last = history[history.length - 1];
       if (last?.role === 'user') {
-        last.content = await this.buildMultiModalContent(last.content as string, attachments);
+        // Pass the last bot message so buildMultiModalContent can inject image-context hints
+        const lastBotMsg = [...session.transcript].reverse().find((m) => m.role === 'assistant')?.content ?? '';
+        last.content = await this.buildMultiModalContent(last.content as string, attachments, lastBotMsg);
       }
     }
 
@@ -290,15 +292,31 @@ export class LlmService implements OnModuleInit {
   /**
    * Build a multi-modal content array for a user message that includes file attachments.
    * Images → image_url blocks. PDFs / videos → text note.
+   * lastBotMsg is passed so context-aware hints can be injected (e.g. alarm screenshot check).
    */
   private async buildMultiModalContent(
     text: string,
     attachments: Attachment[],
+    lastBotMsg = '',
   ): Promise<OpenAI.Chat.Completions.ChatCompletionContentPart[]> {
     const blocks: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [];
 
+    // Detect if the bot was specifically waiting for a Spin App alarm screenshot.
+    // When true, the LLM must verify the image is actually the Alarms screen; if not,
+    // it should ask the customer to re-upload or type the alarm name instead.
+    const botWaitingForAlarm = /alarm.*screen|screen.*alarm|Support.*Alarms|Alarms.*screen|screenshot.*alarm|alarm.*screenshot|type.*alarm|alarm.*type|alarm name|alarms screen|send.*screenshot|screenshot.*send/i.test(lastBotMsg);
+
     for (const att of attachments) {
       if (att.type === 'image') {
+        // When the bot was waiting for an alarm screenshot, inject a context check FIRST
+        // so the LLM knows to validate image relevance before extracting any information.
+        if (botWaitingForAlarm) {
+          blocks.push({
+            type: 'text',
+            text: `[IMAGE CONTEXT: You had asked the customer to send a screenshot of the Spin App Alarms screen. Before doing anything else, determine whether this image IS actually the Alarms screen from the Spin App. If YES (it shows alarm entries with names like "Mains Fail", "Earth Detect", etc.): extract all alarm names visible and immediately start troubleshooting the top alarm — do NOT ask the customer to type the name again. If NO (it is a charger photo, sticker, unrelated image, or any other screen): respond exactly with "The image you sent does not appear to be the Alarms screen. Please either re-upload a screenshot from Support → Alarms in the Spin App, or type the alarm name directly here." Do not proceed with troubleshooting until you have confirmed the alarm name.]`,
+          });
+        }
+
         // Try QR scan first — if it succeeds, use that serial exclusively
         const qrValue = await scanQrFromBase64(att.data);
         if (qrValue) {
