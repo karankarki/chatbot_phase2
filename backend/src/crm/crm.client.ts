@@ -11,8 +11,6 @@ import {
   CrmTicket,
   CustomerDetailResponse,
   CustomerLookup,
-  HandoffPayload,
-  HandoffResult,
   TicketCreateResult,
   TicketSummaryResponse,
   TicketSummaryResult,
@@ -241,6 +239,11 @@ export class CrmClient {
     }
   }
 
+  /** Timestamp of the last successful category map fetch — used to invalidate prompt caches. */
+  getCategoryFetchedAt(): number {
+    return this.categoryMapFetchedAt;
+  }
+
   private async resolveCategory(
     categoryLabel: string,
     subCategoryLabel: string,
@@ -402,20 +405,4 @@ export class CrmClient {
     }
   }
 
-  // ─── NOC handoff ───────────────────────────────────────────────────────────
-
-  async requestHandoff(payload: HandoffPayload): Promise<HandoffResult> {
-    const webhook = process.env.NOC_HANDOFF_WEBHOOK?.trim();
-    if (!webhook) {
-      this.log.warn('NOC_HANDOFF_WEBHOOK not set — returning offline handoff');
-      return { handoffId: `H-${Date.now()}`, offline: true };
-    }
-    try {
-      await axios.post(webhook, payload, { timeout: 5_000 });
-      return { handoffId: `H-${Date.now()}`, etaSeconds: 120 };
-    } catch (e) {
-      this.log.error(`Handoff webhook failed: ${(e as Error).message}`);
-      return { handoffId: `H-${Date.now()}`, offline: true };
-    }
-  }
 }

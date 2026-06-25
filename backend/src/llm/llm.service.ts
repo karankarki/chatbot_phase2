@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { readFileSync, writeFileSync } from 'fs';
+import { appendFile } from 'fs';
 import OpenAI from 'openai';
 import { buildSystemPrompt } from '../chat/prompt';
 import { TOOL_SCHEMAS } from './tool-schemas';
@@ -20,6 +20,9 @@ export class LlmService implements OnModuleInit {
   private model!: string;
   private maxTokens!: number;
 
+  /** Cached system prompt strings keyed by channel, invalidated when category map refreshes. */
+  private readonly promptCache = new Map<string, { prompt: string; categoryFetchedAt: number }>();
+
   constructor(
     private readonly tools: ToolRegistry,
     private readonly sessions: SessionService,
@@ -35,6 +38,9 @@ export class LlmService implements OnModuleInit {
     }
     this.model = process.env.LLM_MODEL ?? 'gpt-4o-mini';
     this.maxTokens = Number(process.env.LLM_MAX_TOKENS ?? 800);
+    // Pre-warm CRM: fetch auth token + category map at startup so the first
+    // user request doesn't pay the cold-start network round trips.
+    this.crm.getCategoriesForDisplay().catch(() => {});
   }
 
   // ─── Token usage logger ────────────────────────────────────────────────────
@@ -45,7 +51,6 @@ export class LlmService implements OnModuleInit {
   };
   private static readonly USD_TO_INR = 90;
   private static readonly TOKEN_LOG  = '/tmp/spinwise-token-usage.log';
-  private static readonly MAX_RECORDS = 100;
 
   private logTokenUsage(sessionId: string, inputTokens: number, outputTokens: number, cachedTokens: number, iterations: number) {
     const pricing = LlmService.PRICING[this.model] ?? { inputUSD: 0, outputUSD: 0 };
@@ -68,21 +73,7 @@ export class LlmService implements OnModuleInit {
       iterations,
     };
 
-    try {
-      let records: typeof record[] = [];
-      try {
-        records = readFileSync(LlmService.TOKEN_LOG, 'utf8')
-          .split('\n').filter(Boolean).map((l) => JSON.parse(l));
-      } catch { /* file doesn't exist yet */ }
-
-      records.push(record);
-      if (records.length > LlmService.MAX_RECORDS) {
-        records = records.slice(records.length - LlmService.MAX_RECORDS);
-      }
-      writeFileSync(LlmService.TOKEN_LOG, records.map((r) => JSON.stringify(r)).join('\n') + '\n', 'utf8');
-    } catch (e) {
-      this.log.warn(`Token log write failed: ${(e as Error).message}`);
-    }
+    appendFile(LlmService.TOKEN_LOG, JSON.stringify(record) + '\n', 'utf8', () => {});
 
     this.log.log(
       `[tokens] session=${sessionId.slice(0, 8)} ` +
@@ -92,11 +83,21 @@ export class LlmService implements OnModuleInit {
   }
   // ──────────────────────────────────────────────────────────────────────────
 
+  /** Return the system prompt string for a channel, rebuilding only when categories refresh. */
+  private async getSystemPrompt(channel: string): Promise<string> {
+    const categoryFetchedAt = this.crm.getCategoryFetchedAt();
+    const cached = this.promptCache.get(channel);
+    if (cached && cached.categoryFetchedAt === categoryFetchedAt) return cached.prompt;
+    const categories = await this.crm.getCategoriesForDisplay();
+    const prompt = buildSystemPrompt(channel as 'web-widget' | 'in-app') + this.buildCategoryBlock(categories);
+    this.promptCache.set(channel, { prompt, categoryFetchedAt: this.crm.getCategoryFetchedAt() });
+    return prompt;
+  }
+
   /** Build the messages array with system prompt prepended. */
   private async buildMessages(sessionId: string, attachments?: Attachment[]): Promise<OAIMessage[]> {
-    const categories = await this.crm.getCategoriesForDisplay();
     const session = this.sessions.get(sessionId);
-    const systemPrompt = buildSystemPrompt(session.channel) + this.buildCategoryBlock(categories);
+    const systemPrompt = await this.getSystemPrompt(session.channel);
     const history = this.toOpenAIMessages(session.transcript, session.slots);
 
     if (attachments?.length) {
@@ -126,22 +127,24 @@ export class LlmService implements OnModuleInit {
       tool_calls: toolCalls,
     });
 
-    // Execute each tool and append result
-    for (const tc of toolCalls) {
-      const tcFn = tc as { id: string; type: string; function: { name: string; arguments: string } };
-      if (tcFn.type !== 'function') continue;
-      let result: unknown;
-      try {
-        const args = JSON.parse(tcFn.function.arguments) as Record<string, unknown>;
-        result = await this.tools.dispatch(sessionId, tcFn.function.name, args);
-      } catch (e) {
-        result = { error: (e as Error).message };
-      }
-      messages.push({
-        role: 'tool',
-        tool_call_id: tc.id,
-        content: JSON.stringify(result),
-      });
+    // Execute all function tool calls in parallel, then push results in original order.
+    const results = await Promise.all(
+      toolCalls
+        .filter((tc) => (tc as any).type === 'function')
+        .map(async (tc) => {
+          const tcFn = tc as { id: string; function: { name: string; arguments: string } };
+          let result: unknown;
+          try {
+            const args = JSON.parse(tcFn.function.arguments) as Record<string, unknown>;
+            result = await this.tools.dispatch(sessionId, tcFn.function.name, args);
+          } catch (e) {
+            result = { error: (e as Error).message };
+          }
+          return { id: tc.id, result };
+        }),
+    );
+    for (const { id, result } of results) {
+      messages.push({ role: 'tool', tool_call_id: id, content: JSON.stringify(result) });
     }
   }
 

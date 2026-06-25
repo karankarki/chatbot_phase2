@@ -126,7 +126,11 @@ export class ChatService implements OnModuleInit {
         // If found, restore historical messages before the current message so the LLM resumes
         // naturally. Web-widget never restores — always starts fresh.
         if (sBefore.channel === 'in-app' && sBefore.slots.mobile) {
-          const history = await this.crm.fetchChatHistory(sBefore.slots.mobile, picked.serial);
+          // Fetch chat history and ticket summary in parallel — both are needed if history exists.
+          const [history, ticketInfo] = await Promise.all([
+            this.crm.fetchChatHistory(sBefore.slots.mobile, picked.serial),
+            this.crm.getTicketSummary(picked.serial),
+          ]);
           if (history.found && !history.isClosed && history.messages?.length) {
             // Insert historical messages before the current user message in the transcript
             const s = this.sessions.get(sessionId);
@@ -141,7 +145,6 @@ export class ChatService implements OnModuleInit {
             s.transcript.push(currentMsg); // re-append current message at the end
 
             // Pre-populate ticket info so the LLM gets the "RESUMED" directive immediately
-            const ticketInfo = await this.crm.getTicketSummary(picked.serial);
             this.sessions.updateSlots(sessionId, {
               hasActiveTicket: ticketInfo.hasActiveTicket,
               activeTicketNo: ticketInfo.activeTicketNo,
@@ -235,8 +238,7 @@ export class ChatService implements OnModuleInit {
         : null;
 
     const ticketId = s.slots.ticketId;
-    const nocHandoffActive = !closed && !!s.slots.handoffRequested;
-    return { sessionId, closed, ticketId, chargerOptions, inputHint, showIssueTypes, showYesNo, showMcbImages, nocHandoffActive, showLedPicker };
+    return { sessionId, closed, ticketId, chargerOptions, inputHint, showIssueTypes, showYesNo, showMcbImages, showLedPicker };
   }
 
   // Called when the user explicitly chooses "Continue previous chat".

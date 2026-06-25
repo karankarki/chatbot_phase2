@@ -20,7 +20,6 @@ export class ToolRegistry {
     switch (name) {
       case 'lookup_customer':       return this.lookupCustomer(sessionId, input);
       case 'get_ticket_summary':    return this.getTicketSummary(sessionId, input);
-      case 'request_noc_handoff':   return this.handoff(sessionId, input);
       case 'create_ticket':         return this.createTicket(sessionId, input);
       default:
         return { error: `Unknown tool: ${name}` };
@@ -186,24 +185,6 @@ export class ToolRegistry {
     };
   }
 
-  // ─── NOC handoff ───────────────────────────────────────────────────────────
-
-  private async handoff(sessionId: string, input: Record<string, unknown>) {
-    const s = this.sessions.get(sessionId);
-    this.sessions.updateSlots(sessionId, { handoffRequested: true });
-    return this.crm.requestHandoff({
-      sessionId,
-      transcriptRef: sessionId,
-      context: {
-        ledState: (input.ledState as string | undefined) ?? s.slots.ledState,
-        alarm: (input.alarm as string | undefined) ?? s.slots.alarm,
-        stepsTried: (input.stepsTried as string[] | undefined) ?? s.slots.stepsTried,
-        chargerSerial: s.slots.chargerSerial,
-        mobile: s.slots.mobile,
-      },
-    });
-  }
-
   // ─── Create ticket ──────────────────────────────────────────────────────────
 
   private async createTicket(sessionId: string, input: Record<string, unknown>) {
@@ -249,7 +230,6 @@ export class ToolRegistry {
       s.slots.ledState ? `LED: ${s.slots.ledState}` : '',
       s.slots.alarm ? `Alarm: ${s.slots.alarm}` : '',
       s.slots.stepsTried.length ? `Steps tried: ${s.slots.stepsTried.join(', ')}` : '',
-      input.noc_findings ? `NOC findings: ${input.noc_findings}` : '',
       input.recommended_engineer_action ? `Recommended action: ${input.recommended_engineer_action}` : '',
     ].filter(Boolean).join('. ');
 

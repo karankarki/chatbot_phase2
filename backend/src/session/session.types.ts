@@ -61,7 +61,6 @@ export interface ChatSession {
     alarm?: string;
     stepsTried: string[];
     photos: string[];
-    handoffRequested?: boolean;
     ticketId?: string;
     closed?: boolean;
     /** Previous conversation messages waiting for user to choose Continue vs Start New. Not yet in transcript. */

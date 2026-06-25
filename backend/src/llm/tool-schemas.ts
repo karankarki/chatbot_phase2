@@ -46,24 +46,6 @@ export const TOOL_SCHEMAS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
-      name: 'request_noc_handoff',
-      description:
-        'Escalate to a live NOC engineer for remote diagnostics (live parameters, raw commands, Operative toggle, phase correction, EPO disable). Pass the full context the customer has shared so they do not have to repeat themselves. If NOC is offline, this returns offline:true and you should fall back to create_ticket.',
-      parameters: {
-        type: 'object',
-        properties: {
-          reason: { type: 'string' },
-          ledState: { type: 'string' },
-          alarm: { type: 'string' },
-          stepsTried: { type: 'array', items: { type: 'string' } },
-        },
-        required: ['reason'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
       name: 'create_ticket',
       description:
         'Create a complaint ticket. Call get_ticket_categories first, pick the best category_name + sub_category_name from the returned labels, show the proposed ticket details to the customer for confirmation, then call this tool. Returns ticketId, categoryName, subCategoryName.',
@@ -87,7 +69,6 @@ export const TOOL_SCHEMAS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             enum: ['High', 'Medium', 'Low'],
             description: 'High for safety/Critical issues; Medium for most hardware faults; Low for minor/app issues.',
           },
-          noc_findings: { type: 'string' },
           recommended_engineer_action: { type: 'string' },
           photos_attachments: { type: 'array', items: { type: 'string' } },
           steps_already_tried: { type: 'array', items: { type: 'string' } },

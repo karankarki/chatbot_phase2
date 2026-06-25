@@ -53,7 +53,6 @@ export function useChat() {
   const [showYesNo, setShowYesNo]           = useState(false);
   const [showMcbImages, setShowMcbImages]   = useState(false);
   const [showLedPicker, setShowLedPicker]   = useState(null); // null | 'old' | 'new'
-  const [nocHandoffActive, setNocHandoffActive] = useState(false);
   const [hasPreviousChat, setHasPreviousChat]   = useState(false);
   const [showAppStore, setShowAppStore]         = useState(false);
 
@@ -61,7 +60,6 @@ export function useChat() {
   const idSeq        = useRef(0);
   const lastActivity = useRef(Date.now());
   const idleActive   = useRef(false);
-  const nocTimerRef  = useRef(null);
 
   const nextId = () => ++idSeq.current;
 
@@ -116,18 +114,6 @@ export function useChat() {
     return () => { if (idleIntervalRef.current) clearInterval(idleIntervalRef.current); };
   }, [closed]);
 
-  // ── NOC handoff timer: show idle warning 2 minutes after NOC is triggered ──
-  useEffect(() => {
-    if (nocTimerRef.current) { clearTimeout(nocTimerRef.current); nocTimerRef.current = null; }
-    if (nocHandoffActive && !closed) {
-      nocTimerRef.current = setTimeout(() => {
-        idleActive.current = true;
-        setIdleWarning(true);
-      }, 120_000);
-    }
-    return () => { if (nocTimerRef.current) clearTimeout(nocTimerRef.current); };
-  }, [nocHandoffActive, closed]);
-
   const stayActive = useCallback(() => {
     lastActivity.current = Date.now();
     idleActive.current   = false;
@@ -173,7 +159,6 @@ export function useChat() {
     setShowYesNo(false);
     setShowMcbImages(false);
     setShowLedPicker(null);
-    setNocHandoffActive(false);
     setHasPreviousChat(false);
     setShowAppStore(false);
     lastActivity.current = Date.now();
@@ -353,7 +338,6 @@ export function useChat() {
             setShowYesNo(data.showYesNo ?? false);
             setShowMcbImages(data.showMcbImages ?? false);
             setShowLedPicker(data.showLedPicker ?? null);
-            setNocHandoffActive(data.nocHandoffActive ?? false);
             if (data.closed) {
               setClosed(true);
               setTimeout(() => setShowReview(true), 400);
@@ -371,7 +355,7 @@ export function useChat() {
   return {
     messages, typing, closed,
     chargerOptions, showIssueTypes, inputHint, isSpinApp,
-    idleWarning, showReview, showYesNo, showMcbImages, showLedPicker, nocHandoffActive,
+    idleWarning, showReview, showYesNo, showMcbImages, showLedPicker,
     hasPreviousChat, showAppStore,
     startSession, sendMessage, stayActive, closeFromIdle, submitReview,
     resumeChat, startFresh, dismissAppStore,

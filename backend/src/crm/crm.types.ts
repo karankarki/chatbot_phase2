@@ -165,26 +165,6 @@ export interface TicketCreateResult {
   ticketId: string;
 }
 
-// ─── NOC Handoff ──────────────────────────────────────────────────────────────
-
-export interface HandoffPayload {
-  sessionId: string;
-  transcriptRef?: string;
-  context: {
-    ledState?: string;
-    alarm?: string;
-    stepsTried?: string[];
-    chargerSerial?: string;
-    mobile?: string;
-  };
-}
-
-export interface HandoffResult {
-  handoffId: string;
-  etaSeconds?: number;
-  offline?: boolean;
-}
-
 // ─── Chat history API shapes ──────────────────────────────────────────────────
 
 export interface ChatHistoryFetchResponse {
