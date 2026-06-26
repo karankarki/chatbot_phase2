@@ -454,6 +454,7 @@ export class LlmService implements OnModuleInit {
     // never rely on remembered state which can be misread and cause hallucination.
     if (slots.ledState)                ctxParts.push(`led=${slots.ledState}`);
     if (slots.alarm)                   ctxParts.push(`alarm=${slots.alarm}`);
+    if (slots.mcbChecked)              ctxParts.push(`mcb_checked=true`);
 
     if (ctxParts.length > 0) {
       const chargerConfirmed = !!slots.chargerSerial;

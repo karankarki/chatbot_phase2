@@ -186,6 +186,18 @@ export class ChatService implements OnModuleInit {
       ({ closed } = await this.llm.respondStream(sessionId, onChunk, attachments));
     }
 
+    // If the bot just asked the burnt-marks or MCB on/off question, mark mcbChecked so
+    // the ticket disclosure uses the MCB charges notice instead of the general one.
+    {
+      const sAfter = this.sessions.get(sessionId);
+      const botReply = [...sAfter.transcript].reverse().find((m) => m.role === 'assistant')?.content ?? '';
+      const askedMcb = /burnt.*mark|black.*mark|mcb.*on|mccb.*on|switch.*on|turned.*on/i.test(botReply);
+      if (askedMcb && !sAfter.slots.mcbChecked) {
+        this.sessions.updateSlots(sessionId, { mcbChecked: true });
+        this.log.log(`[${sessionId}] mcbChecked set — bot asked MCB/burnt marks question`);
+      }
+    }
+
     // Persist conversation to CRM after every turn so it can be resumed if the user abandons.
     // Pass closed=true only on graceful end so fetch can tell resumable from completed.
     {

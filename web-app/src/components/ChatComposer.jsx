@@ -61,6 +61,54 @@ function readAsBase64(file) {
   });
 }
 
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
+const MAX_PX = 1920;
+
+// Compress an image file to under 2 MB using canvas resize + JPEG quality reduction.
+// Non-image files are returned unchanged.
+function compressImage(file) {
+  if (!file.type.startsWith('image/') && file.type !== '') return Promise.resolve(file);
+  if (file.size <= MAX_IMAGE_BYTES) return Promise.resolve(file);
+
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { naturalWidth: w, naturalHeight: h } = img;
+
+      // Resize so longest side ≤ MAX_PX
+      if (w > MAX_PX || h > MAX_PX) {
+        const ratio = Math.min(MAX_PX / w, MAX_PX / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+
+      // Reduce quality until under 2 MB
+      let quality = 0.85;
+      let dataUrl;
+      do {
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+        quality -= 0.05;
+      } while (dataUrl.length * 0.75 > MAX_IMAGE_BYTES && quality > 0.1);
+
+      // Convert dataUrl back to a File
+      const binary = atob(dataUrl.split(',')[1]);
+      const arr = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+      const compressed = new File([arr], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+      resolve(compressed);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 // Scan image file for a QR code. Returns the serial number (part after '#') or null.
 function scanQRCode(file) {
   return new Promise((resolve) => {
@@ -125,8 +173,9 @@ export default function ChatComposer({ onSend, disabled, inputHint, detectedCoun
         if (serial) setText(serial);
       }
 
-      const { base64, mediaType } = await readAsBase64(file);
-      const previewUrl = kind === 'image' ? URL.createObjectURL(file) : null;
+      const processedFile = kind === 'image' ? await compressImage(file) : file;
+      const { base64, mediaType } = await readAsBase64(processedFile);
+      const previewUrl = kind === 'image' ? URL.createObjectURL(processedFile) : null;
       added.push({ type: kind, mediaType, data: base64, name: file.name, previewUrl });
     }
     setFiles((prev) => [...prev, ...added]);

@@ -67,6 +67,8 @@ export interface ChatSession {
     closed?: boolean;
     /** Previous conversation messages waiting for user to choose Continue vs Start New. Not yet in transcript. */
     pendingHistory?: Array<{ role: string; content: string }>;
+    /** Set to true once the bot has asked the burnt-marks or MCB on/off question in this session. */
+    mcbChecked?: boolean;
     /** Map of serial → charger generation ('old' | 'new'), sent by Spin App URL params */
     chargerModels?: Record<string, 'old' | 'new'>;
   };
