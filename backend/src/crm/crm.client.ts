@@ -369,27 +369,40 @@ export class CrmClient {
     messages?: Array<{ role: string; content: string }>;
     isClosed?: boolean;
   }> {
+    this.log.log(`[chatHistory] FETCH → mobile=${phoneNo} serial=${serialNo}`);
     try {
       const headers = await this.authHeaders();
       const { data } = await axios.get<ChatHistoryFetchResponse>(
         `${this.base}/api/spin-chat/chat-history`,
         { params: { mobileNumber: phoneNo, serialNumber: serialNo }, headers, timeout: 10_000 },
       );
+      this.log.log(`[chatHistory] FETCH response status=${data.status?.code} hasData=${!!data.data}`);
       if (data.status?.code !== 2000 || !data.data || typeof data.data === 'string') {
+        this.log.log(`[chatHistory] FETCH → not found (status=${data.status?.code})`);
         return { found: false };
       }
       const body = data.data as { conversation?: string; conversationText?: string };
       const raw  = body.conversation ?? body.conversationText ?? '';
-      if (!raw) return { found: false };
+      if (!raw) {
+        this.log.log(`[chatHistory] FETCH → found but conversation is empty`);
+        return { found: false };
+      }
 
       const isClosed = raw.includes('[END]');
-      if (isClosed) return { found: true, isClosed: true };
+      if (isClosed) {
+        this.log.log(`[chatHistory] FETCH → found but conversation is closed [END]`);
+        return { found: true, isClosed: true };
+      }
 
       const cleaned = raw.replace(/\n\[END\]$/, '');
       const messages = JSON.parse(cleaned) as Array<{ role: string; content: string }>;
+      this.log.log(`[chatHistory] FETCH → found ${messages.length} resumable messages`);
+      messages.forEach((m, i) =>
+        this.log.log(`[chatHistory]   [${i}] ${m.role}: ${String(m.content).slice(0, 80)}${m.content.length > 80 ? '…' : ''}`),
+      );
       return { found: true, messages, isClosed: false };
     } catch (e) {
-      this.log.warn(`fetchChatHistory: ${(e as Error).message}`);
+      this.log.warn(`[chatHistory] FETCH error: ${(e as Error).message}`);
       return { found: false };
     }
   }
@@ -400,19 +413,28 @@ export class CrmClient {
     messages: Array<{ role: string; content: string }>,
     closed = false,
   ): Promise<void> {
+    this.log.log(`[chatHistory] SAVE → mobile=${phoneNo} serial=${serialNo} msgs=${messages.length} closed=${closed}`);
+    messages.forEach((m, i) =>
+      this.log.log(`[chatHistory]   [${i}] ${m.role}: ${String(m.content).slice(0, 80)}${m.content.length > 80 ? '…' : ''}`),
+    );
     try {
       const headers = await this.authHeaders();
       // Append [END] only for gracefully closed sessions so fetch can distinguish
       // a resumable (abandoned) conversation from a completed one.
       const conversation = JSON.stringify(messages) + (closed ? '\n[END]' : '');
-      await axios.post(
-        `${this.base}/api/spin-chat/chat-history`,
-        { phoneNo, serialNo, conversation },
-        { headers: { ...headers, 'Content-Type': 'application/json' }, timeout: 10_000 },
+      const url = `${this.base}/api/spin-chat/chat-history`;
+      const body = { phoneNo, serialNo, conversation };
+      this.log.log(
+        `[chatHistory] CRM CURL:\ncurl -X POST '${url}' \\\n` +
+        `  -H 'Content-Type: application/json' \\\n` +
+        `  -H 'Authorization: ${headers['Authorization'] ?? ''}' \\\n` +
+        `  -d '${JSON.stringify(body).replace(/'/g, "\\'")}'`,
       );
-      this.log.log(`[chatHistory] saved ${messages.length} msgs for ${phoneNo}/${serialNo} closed=${closed}`);
+      await axios.post(url, body, { headers: { ...headers, 'Content-Type': 'application/json' }, timeout: 10_000 });
+      this.log.log(`[chatHistory] SAVE ✓ — ${messages.length} msgs stored for ${phoneNo}/${serialNo}`);
     } catch (e) {
-      this.log.warn(`saveChatHistory: ${(e as Error).message}`);
+      const ae = e as AxiosError;
+      this.log.warn(`[chatHistory] SAVE error: ${ae.message} — response: ${JSON.stringify(ae.response?.data)}`);
     }
   }
 

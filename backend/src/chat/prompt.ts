@@ -727,13 +727,17 @@ and current condition from the conversation. The message must include:
      issue is intermittent, no longer occurring, or currently working, state that
      explicitly (e.g. "which you mentioned is currently not occurring" or "which
      appears to be working at this time").
-  3. A CHARGE NOTICE — choose based on what was discussed:
-     • If the MCB/MCCB question was asked at any point in this conversation (i.e. you
-       asked about burnt marks or whether the MCB/MCCB is ON) → say:
+  3. A CHARGE NOTICE — use this exact rule, no exceptions:
+     Look back at the full conversation history right now.
+     Did you (the assistant) send a message that asked ANY of these?
+       - "Are there any burnt or black marks on the MCB or the charger?"
+       - "Is the MCB or MCCB switch turned ON?"
+       - Any variation asking about MCB/MCCB status or burnt marks.
+     IF YES (regardless of what the customer answered, regardless of whether MCB was
+     found ON or OFF, regardless of what fault was ultimately found) → use:
        "Please note that if the MCB/MCCB is found to be faulty or requires replacement,
-       MCB/MCCB charges will be applicable."
-     • For all other cases (MCB question was never asked — LED fault, alarm, hardware
-       error, slow charging, RFID, app issue, etc.) → say:
+       charges will be applicable."
+     IF NO (MCB/burnt marks questions were never sent in this conversation) → use:
        "Please note that if a fault is found during the engineer's visit, applicable
        service charges may apply."
   4. A request for confirmation to proceed.

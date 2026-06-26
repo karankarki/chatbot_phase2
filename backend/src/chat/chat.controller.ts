@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Logger, Param, Post, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ChatService } from './chat.service';
 import { SendMessageDto, StartSessionDto } from './dto';
 
 @Controller('chat')
 export class ChatController {
+  private readonly log = new Logger(ChatController.name);
   constructor(private readonly chat: ChatService) {}
 
   @Post('session')
@@ -65,7 +66,8 @@ export class ChatController {
   // Beacon endpoint — called via navigator.sendBeacon on page close.
   // Returns 204 so the browser beacon succeeds without parsing a body.
   @Post('session/:id/save')
-  saveOnClose(@Param('id') id: string, @Res() res: Response) {
+  saveOnClose(@Param('id') id: string, @Req() req: Request, @Res() res: Response) {
+    this.log.log(`[SAVE HIT] curl -X POST http://localhost:4000/api/chat/session/${id}/save -H "Content-Type: application/json" -d '{}'`);
     this.chat.saveOpenChat(id);
     res.status(204).end();
   }
