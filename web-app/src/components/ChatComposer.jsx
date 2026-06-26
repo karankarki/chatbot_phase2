@@ -165,16 +165,20 @@ export default function ChatComposer({ onSend, disabled, inputHint, detectedCoun
         continue;
       }
       if (!kind) { alert(`${file.name}: only images, PDFs, and videos are allowed.`); continue; }
-      if (file.size > MAX_MB * 1024 * 1024) { alert(`${file.name} exceeds ${MAX_MB} MB.`); continue; }
+      // For non-image files check the size limit up-front.
+      // Images are compressed first — the 10 MB gate would wrongly block large phone photos.
+      if (kind !== 'image' && file.size > MAX_MB * 1024 * 1024) { alert(`${file.name} exceeds ${MAX_MB} MB.`); continue; }
 
-      // Try QR scan on images silently — pre-fill serial if found
+      // Try QR scan on images silently — pre-fill serial if found (scan original, not compressed)
       if (kind === 'image') {
         const serial = await scanQRCode(file);
         if (serial) setText(serial);
       }
 
       const processedFile = kind === 'image' ? await compressImage(file) : file;
-      const { base64, mediaType } = await readAsBase64(processedFile);
+      const { base64, mediaType: rawMediaType } = await readAsBase64(processedFile);
+      // Android WebViews sometimes omit the MIME type; fall back to JPEG for images.
+      const mediaType = rawMediaType || (kind === 'image' ? 'image/jpeg' : 'application/octet-stream');
       const previewUrl = kind === 'image' ? URL.createObjectURL(processedFile) : null;
       added.push({ type: kind, mediaType, data: base64, name: file.name, previewUrl });
     }
