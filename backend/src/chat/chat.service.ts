@@ -105,10 +105,8 @@ export class ChatService implements OnModuleInit {
     onChunk: (text: string) => void,
     attachments?: Attachment[],
   ) {
-    const attachmentNote = attachments?.length
-      ? ` [Attached: ${attachments.map((a) => a.name).join(', ')}]`
-      : '';
-    this.sessions.append(sessionId, { role: 'user', content: message + attachmentNote });
+    // attachmentNote disabled
+    this.sessions.append(sessionId, { role: 'user', content: message });
 
     // Capture pre-turn charger state to detect first-time selection from multi-charger list
     const sBefore = this.sessions.get(sessionId);

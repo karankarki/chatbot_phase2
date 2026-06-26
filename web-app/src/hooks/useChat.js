@@ -279,10 +279,9 @@ export function useChat() {
     setShowMcbImages(false);
     setShowLedPicker(null);
 
-    // Show user bubble — image previews rendered as thumbnails, no filename text
-    const display = text || (attachments.length ? '' : '');
-    const imagePreviews = previewUrls.filter(Boolean);
-    pushMsg('user', display, { imagePreviews });
+    // Show user bubble
+    const display = text;
+    pushMsg('user', display);
     setTyping(true);
 
     // id for the bot message we'll grow as chunks arrive
@@ -306,8 +305,8 @@ export function useChat() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: text || '(attachment)',
-          attachments: attachments.length ? attachments : undefined,
+          message: text,
+          // attachments disabled
         }),
       });
 

@@ -196,12 +196,9 @@ export default function ChatComposer({ onSend, disabled, inputHint, detectedCoun
 
   const submit = () => {
     const msg = text.trim();
-    if (!msg && !files.length) return;
-    const previewUrls = files.map((f) => f.previewUrl ?? null);
-    const attachments = files.map(({ previewUrl, ...rest }) => rest);
-    onSend(msg, attachments, previewUrls);
+    if (!msg) return;
+    onSend(msg, [], []);
     setText('');
-    setFiles([]);
   };
 
   const handleKey = (e) => {
@@ -256,9 +253,11 @@ export default function ChatComposer({ onSend, disabled, inputHint, detectedCoun
 
   return (
     <div className="composer">
+      {/* Attachments disabled
       <AttachmentPreviews files={files} onRemove={removeFile} />
+      */}
       <div className="composer__row">
-        {/* label wrapper is the most reliable trigger for file inputs on iOS/Android WebViews */}
+        {/* Attach button disabled
         <label
           className="composer__attach"
           title="Attach file"
@@ -274,6 +273,7 @@ export default function ChatComposer({ onSend, disabled, inputHint, detectedCoun
             onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }}
           />
         </label>
+        */}
         <div className="composer__input-wrap">
           <textarea
             className="composer__input"
@@ -297,7 +297,7 @@ export default function ChatComposer({ onSend, disabled, inputHint, detectedCoun
         <button
           className="composer__send"
           onClick={submit}
-          disabled={disabled || (!text.trim() && !files.length)}
+          disabled={disabled || !text.trim()}
         >
           ➤
         </button>

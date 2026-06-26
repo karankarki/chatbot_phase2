@@ -100,14 +100,8 @@ export class LlmService implements OnModuleInit {
     const systemPrompt = await this.getSystemPrompt(session.channel);
     const history = this.toOpenAIMessages(session.transcript, session.slots);
 
-    if (attachments?.length) {
-      const last = history[history.length - 1];
-      if (last?.role === 'user') {
-        // Pass the last bot message so buildMultiModalContent can inject image-context hints
-        const lastBotMsg = [...session.transcript].reverse().find((m) => m.role === 'assistant')?.content ?? '';
-        last.content = await this.buildMultiModalContent(last.content as string, attachments, lastBotMsg);
-      }
-    }
+    // Attachments disabled — multimodal content building skipped
+    // if (attachments?.length) { ... }
 
     return [
       { role: 'system', content: systemPrompt },
