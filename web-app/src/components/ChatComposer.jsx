@@ -61,14 +61,14 @@ function readAsBase64(file) {
   });
 }
 
-const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
-const MAX_PX = 1920;
+// Target: smallest size that still lets AI reliably read text + detect damage
+const MAX_IMAGE_BYTES = 1 * 1024 * 1024; // 1 MB
+const MAX_PX = 1024;
 
-// Compress an image file to under 2 MB using canvas resize + JPEG quality reduction.
-// Non-image files are returned unchanged.
+// Always re-encode images through canvas: normalise MIME type, resize to ≤1024px,
+// and reduce JPEG quality until under 1 MB — optimised for AI vision tasks.
 function compressImage(file) {
   if (!file.type.startsWith('image/') && file.type !== '') return Promise.resolve(file);
-  if (file.size <= MAX_IMAGE_BYTES) return Promise.resolve(file);
 
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
@@ -77,7 +77,7 @@ function compressImage(file) {
       URL.revokeObjectURL(url);
       let { naturalWidth: w, naturalHeight: h } = img;
 
-      // Resize so longest side ≤ MAX_PX
+      // Scale down so longest side ≤ MAX_PX
       if (w > MAX_PX || h > MAX_PX) {
         const ratio = Math.min(MAX_PX / w, MAX_PX / h);
         w = Math.round(w * ratio);
@@ -89,15 +89,14 @@ function compressImage(file) {
       canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
 
-      // Reduce quality until under 2 MB
-      let quality = 0.85;
+      // Start at 0.75 quality; reduce until under 1 MB
+      let quality = 0.75;
       let dataUrl;
       do {
         dataUrl = canvas.toDataURL('image/jpeg', quality);
         quality -= 0.05;
       } while (dataUrl.length * 0.75 > MAX_IMAGE_BYTES && quality > 0.1);
 
-      // Convert dataUrl back to a File
       const binary = atob(dataUrl.split(',')[1]);
       const arr = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
@@ -196,9 +195,12 @@ export default function ChatComposer({ onSend, disabled, inputHint, detectedCoun
 
   const submit = () => {
     const msg = text.trim();
-    if (!msg) return;
-    onSend(msg, [], []);
+    if (!msg && !files.length) return;
+    const previewUrls = files.map((f) => f.previewUrl ?? null);
+    const attachments = files.map(({ previewUrl, ...rest }) => rest);
+    onSend(msg, attachments, previewUrls);
     setText('');
+    setFiles([]);
   };
 
   const handleKey = (e) => {
@@ -253,11 +255,9 @@ export default function ChatComposer({ onSend, disabled, inputHint, detectedCoun
 
   return (
     <div className="composer">
-      {/* Attachments disabled
       <AttachmentPreviews files={files} onRemove={removeFile} />
-      */}
       <div className="composer__row">
-        {/* Attach button disabled
+        {/* label wrapper is the most reliable trigger for file inputs on iOS/Android WebViews */}
         <label
           className="composer__attach"
           title="Attach file"
@@ -273,7 +273,6 @@ export default function ChatComposer({ onSend, disabled, inputHint, detectedCoun
             onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }}
           />
         </label>
-        */}
         <div className="composer__input-wrap">
           <textarea
             className="composer__input"
@@ -297,7 +296,7 @@ export default function ChatComposer({ onSend, disabled, inputHint, detectedCoun
         <button
           className="composer__send"
           onClick={submit}
-          disabled={disabled || !text.trim()}
+          disabled={disabled || (!text.trim() && !files.length)}
         >
           ➤
         </button>

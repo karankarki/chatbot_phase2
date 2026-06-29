@@ -105,8 +105,10 @@ export class ChatService implements OnModuleInit {
     onChunk: (text: string) => void,
     attachments?: Attachment[],
   ) {
-    // attachmentNote disabled
-    this.sessions.append(sessionId, { role: 'user', content: message });
+    const attachmentNote = attachments?.length
+      ? ` [Attached: ${attachments.map((a) => a.name).join(', ')}]`
+      : '';
+    this.sessions.append(sessionId, { role: 'user', content: message + attachmentNote });
 
     // Capture pre-turn charger state to detect first-time selection from multi-charger list
     const sBefore = this.sessions.get(sessionId);
@@ -225,8 +227,10 @@ export class ChatService implements OnModuleInit {
     const lastUserMsg = [...s.transcript].reverse().find((m) => m.role === 'user')?.content ?? '';
     // Only trigger when the bot is explicitly requesting the number as input,
     // not when it merely mentions "mobile number" in guidance text.
-    const botAskingMobile = /\b(share|provide|enter|give|tell\s+me)\s+(your\s+)?(mobile|phone|registered)\s*(number)?/i.test(lastBotMsg)
-      || /\byour\s+registered\s+mobile\s+number\b.*\?/i.test(lastBotMsg);
+    const botAskingMobile = /\b(share|provide|enter|give|tell\s+me|need|require)\s+(your\s+)?(mobile|phone|registered)\s*(number)?/i.test(lastBotMsg)
+      || /\byour\s+registered\s+mobile\s+number\b/i.test(lastBotMsg)
+      || /\b(mobile|phone)\s+number\b.*\?/i.test(lastBotMsg)
+      || /\bneed\s+(your\s+)?(mobile|phone)\b/i.test(lastBotMsg);
     const botAskingSerial = /(share|provide|enter|give|tell).*serial|(serial\s*(number)?\s*(printed|on.*sticker))|printed on.*sticker/i.test(lastBotMsg);
     const userGaveUpSerial = /don.?t\s*have|no\s*serial|without.*serial|can.?t\s*find|not.*serial|no.*serial/i.test(lastUserMsg);
     const userTurnCount = s.transcript.filter((m) => m.role === 'user').length;

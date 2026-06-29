@@ -100,8 +100,13 @@ export class LlmService implements OnModuleInit {
     const systemPrompt = await this.getSystemPrompt(session.channel);
     const history = this.toOpenAIMessages(session.transcript, session.slots);
 
-    // Attachments disabled — multimodal content building skipped
-    // if (attachments?.length) { ... }
+    if (attachments?.length) {
+      const last = history[history.length - 1];
+      if (last?.role === 'user') {
+        const lastBotMsg = [...session.transcript].reverse().find((m) => m.role === 'assistant')?.content ?? '';
+        last.content = await this.buildMultiModalContent(last.content as string, attachments, lastBotMsg);
+      }
+    }
 
     return [
       { role: 'system', content: systemPrompt },
@@ -295,19 +300,26 @@ export class LlmService implements OnModuleInit {
   ): Promise<OpenAI.Chat.Completions.ChatCompletionContentPart[]> {
     const blocks: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [];
 
-    // Detect if the bot was specifically waiting for a Spin App alarm screenshot.
-    // When true, the LLM must verify the image is actually the Alarms screen; if not,
-    // it should ask the customer to re-upload or type the alarm name instead.
-    const botWaitingForAlarm = /alarm.*screen|screen.*alarm|Support.*Alarms|Alarms.*screen|screenshot.*alarm|alarm.*screenshot|type.*alarm|alarm.*type|alarm name|alarms screen|send.*screenshot|screenshot.*send/i.test(lastBotMsg);
+    // Detect the current conversational context so the LLM knows how to interpret the image.
+    const botWaitingForAlarm   = /alarm.*screen|Support.*Alarms|Alarms.*screen|type.*alarm|alarm name/i.test(lastBotMsg);
+    const botAskingBurntMarks  = /burnt.*mark|black.*mark|burn.*mark|marks.*mcb|scorch|burnt.*charger|damaged.*charger/i.test(lastBotMsg);
 
     for (const att of attachments) {
       if (att.type === 'image') {
-        // When the bot was waiting for an alarm screenshot, inject a context check FIRST
-        // so the LLM knows to validate image relevance before extracting any information.
         if (botWaitingForAlarm) {
           blocks.push({
             type: 'text',
-            text: `[IMAGE CONTEXT: You had asked the customer to send a screenshot of the Spin App Alarms screen. Before doing anything else, determine whether this image IS actually the Alarms screen from the Spin App. If YES (it shows alarm entries with names like "Mains Fail", "Earth Detect", etc.): extract all alarm names visible and immediately start troubleshooting the top alarm — do NOT ask the customer to type the name again. If NO (it is a charger photo, sticker, unrelated image, or any other screen): respond exactly with "The image you sent does not appear to be the Alarms screen. Please either re-upload a screenshot from Support → Alarms in the Spin App, or type the alarm name directly here." Do not proceed with troubleshooting until you have confirmed the alarm name.]`,
+            text: `[IMAGE CONTEXT: The customer was asked to provide the alarm name from the Spin App Alarms screen. Determine whether this image IS actually the Alarms screen. If YES (shows alarm entries with names like "Mains Fail", "Earth Detect", etc.): extract all alarm names visible and immediately start troubleshooting the top alarm — do NOT ask the customer to type the name again. If NO (charger photo, sticker, unrelated image, or any other screen): say "The image you sent does not appear to be the Alarms screen. Please go to Support → Alarms in the Spin App and send a screenshot of that screen, or type the alarm name directly here." Do not proceed with troubleshooting until the alarm name is confirmed.]`,
+          });
+        } else if (botAskingBurntMarks) {
+          blocks.push({
+            type: 'text',
+            text: `[IMAGE CONTEXT: The customer was asked whether there are any burnt or black marks on the MCB or charger. Carefully examine this image for: 1) Black or dark-brown scorch marks on any surface, 2) Burnt, melted, or charred wire insulation, 3) Discoloured or heat-damaged circuit breakers or components, 4) Any evidence of fire, arcing, or overheating. If burnt/damaged areas ARE clearly visible: treat this as YES to the burnt marks question — apply the safety protocol immediately (do not touch equipment, call electrician, raise priority ticket). If NO burnt marks are visible: treat as NO and proceed to the MCB check (step b). If the image is unclear or does not show the MCB/charger: ask "I could not see the MCB or charger clearly in the image. Could you upload a closer photo, or simply type Yes or No?"]`,
+          });
+        } else {
+          blocks.push({
+            type: 'text',
+            text: `[IMAGE CONTEXT: Analyze this image intelligently based on the current stage of the conversation. Determine what the image shows and extract any information useful for the current step: serial number on sticker (extract characters after #), LED colour and pattern, MCB/charger condition, or other relevant details. If the image is relevant and useful — extract the information and continue the workflow naturally. If the image is unclear, unreadable, or does not contain useful information for the current step — describe what you can see, note it does not help the current step, and ask for the specific information needed.]`,
           });
         }
 
