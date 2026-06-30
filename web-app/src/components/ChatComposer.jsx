@@ -62,8 +62,8 @@ function readAsBase64(file) {
 }
 
 // Target: smallest size that still lets AI reliably read text + detect damage
-const MAX_IMAGE_BYTES = 512 * 1024; // 512 KB
-const MAX_PX = 768;
+const MAX_IMAGE_BYTES = 256 * 1024; // 256 KB
+const MAX_PX = 512;
 
 // Always re-encode images through canvas: normalise MIME type, resize to ≤1024px,
 // and reduce JPEG quality until under 1 MB — optimised for AI vision tasks.
